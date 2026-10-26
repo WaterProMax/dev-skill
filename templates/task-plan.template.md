@@ -70,5 +70,13 @@
    ```
 3. **Step 3（端到端冒烟或回归测试）**：
    ```bash
-   <填写具体可执行命令，例如：python3 tests/evaluate_workspace.py --workspace . --mode phase2>
+   <填写具体可执行命令，例如：python3 tests/evaluate_workspace.py --workspace . --scene phase2_delivery>
    ```
+
+### 5.1 结果验收与证据（按任务填写）
+
+对每个必要 `acceptanceItem` 写明：稳定 ID、输入/适用条件、可观察的通过与失败判据、保证层、验证命令/人工检查方法、证据产物路径。Scale S 可用简短条目；不适用的项无需展开。
+
+- **声明边界**：`<哪些功能已实现/已实测；哪些依赖为 MOCK；未测或未知项>`
+- **复现信息**：`<提交、配置/运行环境、样例 ID、时间、命令、退出状态及日志路径>`
+- **搜索/推荐/AI 任务（仅适用时）**：参考 Skill 的 `references/evidence-driven-workflows.md`，分别定义候选发现与逐项核验的通过标准，列出 `fixed-material` / `end-to-end-search` 的运行条件、Baseline 公平性、样本数、成功/错误/拒绝计数与分母、成本和重试预算。不能用全部拒绝的“零误推”替代推荐成功率。

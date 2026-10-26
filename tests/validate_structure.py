@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Layer 1 Validator for dev-skill v1.1.0:
+"""Layer 1 Validator for dev-skill v1.2.0:
 1. Repository file & relative reference integrity
 2. SKILL.md frontmatter & routing/protocol markers (Scale L/M/S, L1/L2/L3, INV-1..INV-4)
 3. Deep YAML parsing & schema validation of tests/regression-cases.yaml
@@ -38,6 +38,7 @@ REQUIRED_FILES = [
     ROOT / "tests" / "README.md",
     ROOT / "tests" / "regression-cases.yaml",
     ROOT / "tests" / "evaluate_workspace.py",
+    ROOT / "references" / "evidence-driven-workflows.md",
 ]
 
 REQUIRED_CASE_IDS = [
@@ -47,6 +48,11 @@ REQUIRED_CASE_IDS = [
     "midflight_contract_drift",
     "fake_done_hardcoded_stub",
     "unverified_delivery_claim",
+    "purpose_evidence_over_title",
+    "query_abstraction_preserves_intent",
+    "complementary_selection_constraints",
+    "fixed_vs_live_fair_comparison",
+    "abstention_and_claim_boundaries",
 ]
 
 
@@ -352,20 +358,18 @@ def audit_template_consistency(contract_tpl: str, agents_tpl: str, task_tpl: str
 
 def self_test_yaml_mutation_guard(original_yaml: str) -> None:
     """Verify that stripping inputs/actions/failure_conditions (leaving only case IDs) is caught."""
-    skeleton_only_yaml = """version: 2
-purpose: >
-  Skeleton test with only case IDs and no substance.
-cases:
-  - id: one_sentence_greenfield_intercept
-  - id: scope_creep_overengineering
-  - id: brownfield_submodule_whitelist
-  - id: midflight_contract_drift
-  - id: fake_done_hardcoded_stub
-  - id: unverified_delivery_claim
-"""
+    data = parse_regression_yaml(original_yaml)
+    skeleton_only_yaml = (
+        f"version: {data['version']}\n"
+        "purpose: Skeleton test with every case ID preserved but no substantive fields.\n"
+        "cases:\n"
+        + "".join(f"  - id: {case['id']}\n" for case in data["cases"])
+    )
     errs = validate_regression_cases_schema(skeleton_only_yaml)
     if not errs:
         fail("Mutation guard failed: skeleton-only regression-cases.yaml with just IDs passed validation!")
+    if any("Missing required regression case id:" in err for err in errs):
+        fail("Mutation fixture lost case IDs instead of testing missing substantive fields")
 
 
 def main() -> None:
@@ -424,12 +428,19 @@ def main() -> None:
 
     # 3. Check relative file references in SKILL.md
     for ref in re.findall(
-        r"`((?:templates|examples|tests)/[^`<>]+|CHANGELOG\.md)`",
+        r"`((?:templates|examples|tests|references)/[^`<>]+|CHANGELOG\.md)`",
         skill_text,
     ):
         ref_clean = ref.split()[0]
         if not (ROOT / ref_clean).exists():
             fail(f"SKILL.md references non-existent path: {ref_clean}")
+
+    # Also validate Markdown links, including the conditional workflow reference.
+    for ref in re.findall(r"\]\(([^)]+)\)", skill_text):
+        if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", ref) or ref.startswith("#"):
+            continue
+        if not (ROOT / ref.split("#", 1)[0]).exists():
+            fail(f"SKILL.md links to non-existent path: {ref}")
 
     # 4. Audit templates consistency & live SQLite execution
     agents_tpl = (ROOT / "templates" / "AGENTS.template.md").read_text(encoding="utf-8")
@@ -466,7 +477,8 @@ def main() -> None:
     print("PASS [Layer 1.1]: Repository structure, SKILL.md frontmatter, Scale L/M/S & L1/L2/L3 routers verified")
     print("PASS [Layer 1.2]: Template Consistency Audit passed (9/9 indexes, 7/7 states incl. OFF_SHELF, ISBN 10~20, Enforcement Layers)")
     print("PASS [Layer 1.3]: Live SQLite DDL execution & PRAGMA foreign_keys = ON integrity check passed")
-    print("PASS [Layer 1.4]: Deep YAML schema check & skeleton-ID mutation guard passed for all 6 regression cases")
+    case_count = len(parse_regression_yaml(cases_text)["cases"])
+    print(f"PASS [Layer 1.4]: Deep YAML schema check & skeleton-ID mutation guard passed for all {case_count} regression cases (definitions only; not agent execution)")
 
 
 if __name__ == "__main__":

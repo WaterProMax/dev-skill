@@ -1,4 +1,4 @@
-# Dev Skill (`dev-skill` `v1.1.0`)
+# Dev Skill (`dev-skill` `v1.2.0`)
 
 > **开发 Skill — 从「一句话需求」或「已有仓库扩模块」到任务规模分流（Scale L/M/S）、`AGENTS.md` 长期规则、当轮任务白名单、自洽数据/接口契约与业务不变量验收的工程治理流程**  
 > **Contract-First MVP & Scoped Development Skill for AI-Assisted Engineering**
@@ -14,7 +14,7 @@
 
 ---
 
-## `v1.1.0` 核心机制一览
+## `v1.2.0` 核心机制一览
 
 ### 1. 双模式 × 三级规模路由（拒绝所有小改动都硬套重型后端模板）
 
@@ -47,6 +47,17 @@
 | **L3 行为/范围变更** | **删除/修改字段、改变状态流转或权限、扩大范围或修改白名单外文件** | **强制暂停（Re-Gate）**：提交具体差异（Diff），重新获得人工确认后才准改代码 |
 
 ---
+
+## 搜索 / 推荐 / RAG 任务的结果验收（`v1.2.0`）
+
+这类任务除原有工程契约外，按需读取 [证据驱动工作流指南](references/evidence-driven-workflows.md)，把“接口跑通”进一步落实为“结果满足用户需求”：
+
+- 按用途定义逐项验收，绑定正文快照和可定位引文；代码/数据通过目标环境执行与结果断言验证。
+- 通用教程搜索移除任务专有表列名，同时保留技术机制词；特定数据集/API 查询保留用户需要的标识，避免一刀切删词。
+- 允许外部教程与有来源、已验证的本地任务数据互补，硬约束通过后再降低阅读负担。
+- 固定候选池与开放搜索分别验收，披露模拟 Baseline、样本数、推荐成功率、错误采纳、拒绝率及成本；0 推荐的错误采纳占比为 N/A。
+
+这些是 Skill 的设计与验收指导，不表示本仓库已经实现学习推荐系统或完成真实 ChatGPT 搜索对照。新规则不要求普通 CRUD、CLI 或前端任务引入推荐流水线。
 
 ## 一键复制话术模板（直接喂给 Cursor / Claude Code / Cloud Agent）
 
@@ -94,7 +105,9 @@ Phase 1 的任务单与契约文件我已确认通过。
 dev-skill/
 ├── SKILL.md                             # Skill 核心入口：Mode×Scale 路由、长期/当轮解耦、Phase 1/2、L1/L2/L3 变更协议、INV-1~4
 ├── README.md                            # 面向队友/新手的仓库说明与一键复制调用话术
-├── CHANGELOG.md                         # 版本演进记录（v1.0.0 -> v1.1.0）
+├── CHANGELOG.md                         # 版本演进记录（v1.0.0 -> v1.2.0）
+├── references/
+│   └── evidence-driven-workflows.md     # 搜索/推荐/AI 任务按需读取：证据、查询提纯、分层评测
 ├── templates/                           # 标准契约与任务单模板
 │   ├── AGENTS.template.md               # 仓库级长期总控规则模板（含真源层级、L1/L2/L3 协议、完整白名单）
 │   ├── task-plan.template.md            # 当轮任务单模板 docs/tasks/<task>.md（含 Scale L/M/S、File Whitelist、验收计划）
@@ -108,7 +121,7 @@ dev-skill/
 │       └── test_minimal_repro.py
 └── tests/                               # 两层验证体系（静态一致性审计 + 沙盒行为评测器）
     ├── README.md
-    ├── regression-cases.yaml            # 6 大回归场景（深度 Schema 校验）
+    ├── regression-cases.yaml            # 11 个回归场景规范（Schema 校验，不自动执行 Agent）
     ├── validate_structure.py            # 第 1 层：结构、YAML 完整性、模板索引/状态机/SQLite 外键自洽审计
     └── evaluate_workspace.py            # 第 2 层：针对目标工作区的 Phase 1 门禁、白名单 git diff、反假桩与测试诚实度评测
 ```
