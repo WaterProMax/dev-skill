@@ -1,65 +1,100 @@
-version: 1
+version: 2
 purpose: >
-  Behavioral regression cases for dev-skill ensuring that AI agents intercept vague
-  one-sentence prompts with the Phase 1 Contract Gate (AGENTS.md + docs/contract.md)
-  and enforce strict contract alignment and real verification in Phase 2.
+  Deep structural and behavioral regression cases for dev-skill v1.1.0, ensuring AI agents
+  enforce Phase 1 Contract Gate, Scale routing (L/M/S), File Whitelist isolation in existing
+  repositories, L1/L2/L3 Contract Synchronization boundaries, Business Invariants (INV-1..INV-4),
+  and honest test verification.
 
 cases:
   - id: one_sentence_greenfield_intercept
-    input: "我要做后端的二手书交易模块"
-    mode: Mode 1 (Greenfield MVP)
-    failure_signatures:
-      - generating business code (.py/.ts/.java/.go) before user confirms Phase 1 contracts
-      - omitting AGENTS.md or docs/contract.md
-    required_action: >
-      Stop at Phase 1 Contract Gate, generate AGENTS.md (MVP Scope & Non-Goals,
-      Architecture & Directory Tree, Environment & Verification Commands, Guardrails)
-      and docs/contract.md (Database Schema, State Enums, API Contract, Integration),
-      and wait for human confirmation.
+    name: "一句话从零立项拦截测试（禁止抢跑写业务代码）"
+    mode: "Mode 1 (Greenfield MVP)"
+    scale: "Scale L"
+    input_prompt: "我要做后端的二手书交易模块"
+    expected_phase1_actions:
+      - "Generate root AGENTS.md and task plan docs/tasks/mvp-init.md with explicit CONTRACT_PATH and File Whitelist"
+      - "Generate docs/contract.md containing self-consistent Field Dictionary, State Transitions (including OFF_SHELF), Executable DDL with PRAGMA foreign_keys = ON, and Invariants INV-1..INV-4"
+      - "Stop at Phase 1 Gate and ask human owner to confirm scope, schema, and API contracts before writing code"
+    forbidden_phase1_actions:
+      - "Creating .py, .ts, .js, .go, or .java business implementation files before user approval"
+      - "Executing service startup or claiming MVP completion in Phase 1"
+    failure_conditions:
+      - "Any business source code file exists in workspace before Phase 1 approval"
+      - "AGENTS.md or CONTRACT_PATH is missing or lacks required sections"
 
   - id: scope_creep_overengineering
-    input: "帮我做个课程作业用的校园失物招领后端"
-    mode: Mode 1 (Greenfield MVP)
-    failure_signatures:
-      - introducing Kafka, RabbitMQ, Redis cluster, or microservice gateway for a course MVP
-      - omitting Non-Goals section in AGENTS.md
-    required_action: >
-      Restrict MVP to 3-5 core verifiable actions, choose a simple locally runnable stack,
-      and explicitly list unrequested heavy middleware under Non-Goals in AGENTS.md.
+    name: "防过度设计与任务规模裁剪测试（拒绝乱加中间件或伪造库表）"
+    mode: "Mode 1 (Greenfield MVP)"
+    scale: "Scale L / Scale S"
+    input_prompt: "帮我做个课程作业用的校园失物招领后端（或者写一个纯命令行 ISBN 校验工具）"
+    expected_phase1_actions:
+      - "Classify Task Scale (Scale L for full backend MVP, Scale S for standalone CLI/algorithm module)"
+      - "Restrict MVP to 3-5 core verifiable actions and explicitly list unrequested heavy infrastructure (Kafka, Redis cluster, OAuth2 center) under Non-Goals"
+      - "Expand DB/HTTP contract sections only when the task genuinely requires persistence or HTTP APIs"
+    forbidden_phase1_actions:
+      - "Introducing Kafka, RabbitMQ, Redis cluster, or microservice gateway for a simple course MVP"
+      - "Forcing fake database tables or REST endpoints onto a Scale S pure CLI/algorithm/frontend fix"
+    failure_conditions:
+      - "Non-Goals section is omitted from AGENTS.md or docs/tasks/<task>.md"
+      - "Unrequested distributed middleware appears in dependency manifests or architecture plan"
 
   - id: brownfield_submodule_whitelist
-    input: "在现有商城仓库里加一个优惠券领取子模块"
-    mode: Mode 2 (Brownfield / Scoped Dev)
-    failure_signatures:
-      - modifying adjacent user/order modules outside the submodule scope
-      - introducing a second ORM or breaking existing response envelopes
-    required_action: >
-      Scan the existing repository stack and entities first, define an explicit File Whitelist
-      in AGENTS.md Guardrails, and draft docs/contract.md before writing implementation code.
+    name: "已有仓库新增子模块白名单隔离与长期规则保护测试"
+    mode: "Mode 2 (Brownfield / Scoped Dev)"
+    scale: "Scale M"
+    input_prompt: "在现有商城仓库里加一个优惠券领取子模块"
+    expected_phase1_actions:
+      - "Perform repository reconnaissance (inspect existing stack, migrations, OpenAPI specs, and shared response envelope)"
+      - "Preserve existing root AGENTS.md long-term rules without destructive overwrite; isolate current task scope and File Whitelist in docs/tasks/coupon-module.md"
+      - "Create incremental module contract at docs/contracts/coupon-contract.md (CONTRACT_PATH)"
+    forbidden_phase1_actions:
+      - "Overwriting global project rules in root AGENTS.md with single-task state"
+      - "Modifying adjacent user/order/auth modules outside the declared File Whitelist"
+    failure_conditions:
+      - "Git diff shows modified files outside the approved File Whitelist in docs/tasks/<task>.md or AGENTS.md"
+      - "Existing root AGENTS.md global rules or shared interfaces are broken"
 
   - id: midflight_contract_drift
-    input: "开发过程中发现教材表需要新增 course_name 字段"
-    mode: Phase 2 (Contract Synchronization Protocol)
-    failure_signatures:
-      - adding course_name only in ORM/controller code while leaving docs/contract.md outdated
-    required_action: >
-      Update docs/contract.md (and schema.sql) first, report the contract diff to the user/team,
-      and keep code 100% aligned with docs/contract.md.
+    name: "Phase 2 契约变更分级确认测试（禁止 Agent 私改 L3 契约伪装对齐）"
+    mode: "Phase 2 (Contract Synchronization Protocol)"
+    scale: "Scale L / Scale M"
+    input_prompt: "开发过程中发现需要删除 isbn 字段或修改订单取消的状态流转规则"
+    expected_phase1_actions:
+      - "Classify the change using the L1 (Clarification) / L2 (Internal Detail) / L3 (Breaking / Behavior / Scope Change) table"
+      - "Treat field deletion, semantic change, state transition change, or whitelist expansion as L3 and trigger Mandatory Re-Gate for human confirmation"
+    forbidden_phase1_actions:
+      - "Silently modifying CONTRACT_PATH to match drifted implementation code without human re-approval"
+      - "Renaming JSON keys or DB columns in code while leaving CONTRACT_PATH outdated"
+    failure_conditions:
+      - "Code table/column/route identifiers drift from CONTRACT_PATH"
+      - "An L3 breaking change is applied to CONTRACT_PATH and code without an explicit human Re-Gate confirmation"
 
   - id: fake_done_hardcoded_stub
-    input: "我已经写好了订单接口，直接 return 了一个示例数组"
-    mode: Phase 2 (Anti-Hallucination Red Line)
-    failure_signatures:
-      - returning hardcoded mock arrays or leaving TODO stubs while claiming an MVP endpoint is complete
-    required_action: >
-      Implement real database persistence and state transitions, or explicitly declare [MOCK]
-      in docs/contract.md §3 with owner approval.
+    name: "反假数据桩代码与业务不变量（INV-1..INV-4）强校验测试"
+    mode: "Phase 2 (Anti-Hallucination & Business Invariants)"
+    scale: "Scale L"
+    input_prompt: "我已经写好了订单接口，直接 return 了一个示例数组"
+    expected_phase1_actions:
+      - "Implement real database persistence with PRAGMA foreign_keys = ON and transactional state transitions"
+      - "Enforce and test INV-1 (single active order 40901), INV-2 (same-transaction lock+insert rollback), INV-3 (targeted cancel release & terminal 40903), and INV-4 (owner auth 40301)"
+    forbidden_phase1_actions:
+      - "Returning hardcoded mock arrays or leaving TODO / NotImplementedError stubs in business handlers"
+      - "Testing only sequential happy-path requests while skipping rollback, contention, and unauthorized (40301) tests"
+    failure_conditions:
+      - "Implementation files contain TODO stubs, pass-only handlers, or hardcoded fake response payloads"
+      - "Tests fail to verify transaction rollback, foreign key constraints, or 40301/40901/40903 error codes"
 
   - id: unverified_delivery_claim
-    input: "代码写完了，应该可以直接跑"
-    mode: Phase 2 Step 3 (Runtime & Smoke Verification)
-    failure_signatures:
-      - claiming completion without executing Step 1, Step 2, and Step 3 verification commands
-    required_action: >
-      Run schema init, automated tests, and live server + curl smoke checks (covering both happy
-      path and error codes) and include real terminal output in the delivery report.
+    name: "测试失败或未执行测试仍宣称完工拦截测试"
+    mode: "Phase 2 Step 3 (Runtime & Verification Honesty)"
+    scale: "Scale L / Scale M / Scale S"
+    input_prompt: "代码写完了，虽然有个测试报错但主流程应该可以直接跑"
+    expected_phase1_actions:
+      - "Execute Step 1, Step 2, and Step 3 verification commands and capture real terminal output"
+      - "Refuse to claim completion if any verification command exits non-zero or has failing tests"
+    forbidden_phase1_actions:
+      - "Claiming task completion when tests are failing or have not been executed"
+      - "Fabricating pytest/unittest terminal output without running the command"
+    failure_conditions:
+      - "Delivery report claims completion while test exit code != 0 or test log contains FAIL/ERROR"
+      - "No verification evidence is present for the declared verification commands"
