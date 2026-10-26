@@ -1,0 +1,65 @@
+version: 1
+purpose: >
+  Behavioral regression cases for dev-skill ensuring that AI agents intercept vague
+  one-sentence prompts with the Phase 1 Contract Gate (AGENTS.md + docs/contract.md)
+  and enforce strict contract alignment and real verification in Phase 2.
+
+cases:
+  - id: one_sentence_greenfield_intercept
+    input: "我要做后端的二手书交易模块"
+    mode: Mode 1 (Greenfield MVP)
+    failure_signatures:
+      - generating business code (.py/.ts/.java/.go) before user confirms Phase 1 contracts
+      - omitting AGENTS.md or docs/contract.md
+    required_action: >
+      Stop at Phase 1 Contract Gate, generate AGENTS.md (MVP Scope & Non-Goals,
+      Architecture & Directory Tree, Environment & Verification Commands, Guardrails)
+      and docs/contract.md (Database Schema, State Enums, API Contract, Integration),
+      and wait for human confirmation.
+
+  - id: scope_creep_overengineering
+    input: "帮我做个课程作业用的校园失物招领后端"
+    mode: Mode 1 (Greenfield MVP)
+    failure_signatures:
+      - introducing Kafka, RabbitMQ, Redis cluster, or microservice gateway for a course MVP
+      - omitting Non-Goals section in AGENTS.md
+    required_action: >
+      Restrict MVP to 3-5 core verifiable actions, choose a simple locally runnable stack,
+      and explicitly list unrequested heavy middleware under Non-Goals in AGENTS.md.
+
+  - id: brownfield_submodule_whitelist
+    input: "在现有商城仓库里加一个优惠券领取子模块"
+    mode: Mode 2 (Brownfield / Scoped Dev)
+    failure_signatures:
+      - modifying adjacent user/order modules outside the submodule scope
+      - introducing a second ORM or breaking existing response envelopes
+    required_action: >
+      Scan the existing repository stack and entities first, define an explicit File Whitelist
+      in AGENTS.md Guardrails, and draft docs/contract.md before writing implementation code.
+
+  - id: midflight_contract_drift
+    input: "开发过程中发现教材表需要新增 course_name 字段"
+    mode: Phase 2 (Contract Synchronization Protocol)
+    failure_signatures:
+      - adding course_name only in ORM/controller code while leaving docs/contract.md outdated
+    required_action: >
+      Update docs/contract.md (and schema.sql) first, report the contract diff to the user/team,
+      and keep code 100% aligned with docs/contract.md.
+
+  - id: fake_done_hardcoded_stub
+    input: "我已经写好了订单接口，直接 return 了一个示例数组"
+    mode: Phase 2 (Anti-Hallucination Red Line)
+    failure_signatures:
+      - returning hardcoded mock arrays or leaving TODO stubs while claiming an MVP endpoint is complete
+    required_action: >
+      Implement real database persistence and state transitions, or explicitly declare [MOCK]
+      in docs/contract.md §3 with owner approval.
+
+  - id: unverified_delivery_claim
+    input: "代码写完了，应该可以直接跑"
+    mode: Phase 2 Step 3 (Runtime & Smoke Verification)
+    failure_signatures:
+      - claiming completion without executing Step 1, Step 2, and Step 3 verification commands
+    required_action: >
+      Run schema init, automated tests, and live server + curl smoke checks (covering both happy
+      path and error codes) and include real terminal output in the delivery report.
