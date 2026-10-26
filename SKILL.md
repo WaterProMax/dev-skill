@@ -15,6 +15,8 @@ Alongside `drawing-skill` (architecture/mechanism diagrams) and `writing-skill` 
 > **2. Contract is the single source of truth (`契约即唯一真相，分级变更重确认`).** Table names, column names, state enums, invariants, route paths, and I/O schemas in code must match `CONTRACT_PATH` 100%. Behavioral or scope changes (L3) require human re-confirmation before editing code.
 > **3. Stepwise execution with real verification (`小步快跑，真实命令与不变量验收`).** Build in verifiable steps and execute real verification commands covering happy paths, concurrency/transaction invariants, and authorization/error boundaries.
 
+> **4. Evidence-backed outcomes (`验收可用结果，而非仅验证链路跑通`).** Define observable acceptance items and their evidence before implementation. Passing a few examples establishes those cases only; report sample size, failures, abstentions, and remaining gaps instead of unsupported completion percentages.
+
 **Violating the letter of the Phase 1 Contract Gate is violating the spirit of this skill.**
 
 ---
@@ -63,6 +65,8 @@ digraph dev_skill_flow {
 
 Database tables, HTTP endpoints, and external service sections must be expanded **only as actually needed** by the task. Never invent fake database tables or REST endpoints just to fill a template.
 
+**Conditional workflow guidance**: For search, recommendation, RAG, or AI evaluation features, read [Evidence-Driven Workflows](references/evidence-driven-workflows.md) during Recon / Phase 1 and use its applicable checks in Phase 2. It covers purpose contracts, source spans, executable artifacts, complementary selection, learner constraints, query abstraction, and fair evaluation. Ordinary CRUD, CLI, and frontend tasks do not need this pipeline.
+
 | Scale | Task Type (`任务类型`) | Appropriate Workflow & Artifacts (`合适的流程与产物`) | Contract Sections to Expand (`按需展开范围`) |
 |---|---|---|---|
 | **Scale L** | **模糊的新项目 (`Vague New Project / Full MVP`)** | Full MVP convergence, architecture design, `AGENTS.md` + `docs/tasks/<task-slug>.md` + `docs/contract.md`, Phase 1 confirmation, then 3-step implementation (`templates/AGENTS.template.md` + `templates/contract.template.md`). | Full sections needed by the system: DB schema + state machine + invariants (if stateful), HTTP API / CLI / Agent JSON schema, and Mock boundaries. |
@@ -104,6 +108,7 @@ When receiving a development request, **STOP in Phase 1**. Produce the required 
    - **In-Scope Actions & Non-Goals**: Concrete verifiable actions and explicit exclusions.
    - **File Whitelist & Read-Only Boundaries**: Every file allowed to be created or modified (must include `requirements.txt` / `package.json` if dependencies are added/updated).
    - **Stepwise Verification Commands**: Exact commands for Step 1, Step 2, and Step 3.
+   - **Outcome Acceptance & Evidence**: Task-specific `acceptanceItems`, pass/fail criteria, evidence producer/artifact path, and known untested boundaries. For retrieval features, separate candidate discovery from downstream validation; a strict filter passing fixed candidates does not establish live-search success.
 
 3. **`CONTRACT_PATH` (`docs/contract.md` or `docs/contracts/<module>-contract.md` — `templates/contract.template.md`)**
    - **Database Schema & Enforcement Layer** *(when DB is involved)*:
@@ -207,11 +212,13 @@ To prevent an agent from silently editing `CONTRACT_PATH` during Phase 2 and the
 - [ ] Code matches `CONTRACT_PATH` 100%; any L3 contract change was explicitly re-approved by the human owner before implementation.
 - [ ] Stateful logic enforces all 4 Business Invariants (single active order, same-transaction lock + insert with rollback, targeted lock release, and explicit owner authorization `40301`).
 - [ ] Step 1, Step 2, and Step 3 verification commands were executed with all tests passing (zero unreported failures or `TODO` stubs).
+- [ ] Outcome claims map to acceptance items and reproducible evidence; tested cases, untested boundaries, and `REAL` / `MOCK` dependencies are stated. For AI workflows, report abstentions and recommendation success alongside erroneous recommendations, and distinguish simulated baselines from actual product comparisons.
 
 ---
 
 ## 8. Templates, Reproducible Examples & Verification Suite
 
+- [Evidence-Driven Workflows](references/evidence-driven-workflows.md) — Conditional design and acceptance guidance for search/recommendation/RAG, including query refinement and fixed-material vs. end-to-end evaluation; contains illustrative examples, not production-run evidence.
 - `templates/AGENTS.template.md` — Template for repository-level `AGENTS.md` steering rules and `CONTRACT_PATH` hierarchy.
 - `templates/task-plan.template.md` — Template for per-task scope, Scale routing (`L/M/S`), File Whitelist, and verification plan (`docs/tasks/<task-slug>.md`).
 - `templates/contract.template.md` — Self-consistent template for `CONTRACT_PATH` (`docs/contract.md` or `docs/contracts/<module>-contract.md`) with Enforcement Layers, SQLite FK pragma, full state transitions, and Business Invariants.
@@ -219,4 +226,4 @@ To prevent an agent from silently editing `CONTRACT_PATH` during Phase 2 and the
 - `examples/minimal-repro/` — Zero-dependency runnable Python + SQLite implementation and invariant test suite (`python3 -m unittest discover -s examples/minimal-repro -v`).
 - `tests/validate_structure.py` — Layer 1 deep structural, YAML schema, and template consistency validator (`python3 tests/validate_structure.py`).
 - `tests/evaluate_workspace.py` — Layer 2 behavioral workspace evaluator checking Phase 1 gate compliance, Mode 2 file whitelist isolation, contract alignment, and test failure honesty (`python3 tests/evaluate_workspace.py --self-test`).
-- `CHANGELOG.md` — Version history (`v1.0.0` -> `v1.1.0`).
+- `CHANGELOG.md` — Version history (`v1.0.0` -> `v1.2.0`).

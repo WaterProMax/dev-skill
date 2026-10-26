@@ -1,9 +1,11 @@
-version: 2
+version: 3
 purpose: >
-  Deep structural and behavioral regression cases for dev-skill v1.1.0, ensuring AI agents
+  Deep structural and behavioral regression specifications for dev-skill v1.2.0, guiding AI agents to
   enforce Phase 1 Contract Gate, Scale routing (L/M/S), File Whitelist isolation in existing
   repositories, L1/L2/L3 Contract Synchronization boundaries, Business Invariants (INV-1..INV-4),
-  and honest test verification.
+  and honest test verification. Conditional workflow cases also cover query abstraction,
+  source and execution evidence, complementary selection, fair evaluation, and claim boundaries.
+  Schema validation checks these definitions; it does not execute agents or live search.
 
 cases:
   - id: one_sentence_greenfield_intercept
@@ -98,3 +100,83 @@ cases:
     failure_conditions:
       - "Delivery report claims completion while test exit code != 0 or test log contains FAIL/ERROR"
       - "No verification evidence is present for the declared verification commands"
+
+  - id: purpose_evidence_over_title
+    name: "用途契约、引文语义与可执行材料验收"
+    mode: "Mode 2 / Phase 1 and Phase 2"
+    scale: "Scale M"
+    input_prompt: "做 SQLite 学习推荐：候选标题叫 JOIN 教程，但正文未讲 ON 与 WHERE；另一候选引文存在却只讲 INNER JOIN，练习数据为空。"
+    expected_phase1_actions:
+      - "Read references/evidence-driven-workflows.md and define task-relevant purpose acceptanceItems with independent evidence and pass criteria"
+      - "Plan source-snapshot span checks plus semantic support checks, and actual database execution with non-empty data and result assertions"
+      - "In Phase 2 reject unsupported coverage, distinguish fetch failure from content failure, and bound retries for missing check items"
+    forbidden_phase1_actions:
+      - "Treating a matching title or a source span that mentions unrelated semantics as proof of acceptance"
+      - "Claiming runnable exercises from syntax parsing alone or treating an in-memory database as a complete security sandbox"
+    failure_conditions:
+      - "The recommendation accepts the INNER JOIN quote as evidence for the required LEFT JOIN filtering behavior"
+      - "Empty data or an unexecuted exercise is marked as having passed executable verification"
+
+  - id: query_abstraction_preserves_intent
+    name: "开放搜索去业务噪声并保留真实技术与数据集意图"
+    mode: "Mode 2 / Phase 1 and Phase 2"
+    scale: "Scale S"
+    input_prompt: "仅优化教程搜索：当前 site:sqlite.org InvoiceLine AlbumId LEFT JOIN 无结果；另一个任务明确需要 Chinook InvoiceLine 示例。"
+    expected_phase1_actions:
+      - "Inspect existing query generation and schema; define generic tutorial queries that remove task-specific identifiers but preserve SQLite LEFT JOIN ON WHERE IS NULL semantics"
+      - "Define a contrasting dataset-specific case that retains Chinook InvoiceLine, plus bounded domain relaxation and query transformation logs"
+      - "In Phase 2 compare useful candidates before and after using unchanged downstream acceptance criteria"
+    forbidden_phase1_actions:
+      - "Deleting every CamelCase token, public API symbol, dataset name or technical keyword by a blanket regex"
+      - "Hardcoding one golden tutorial URL as a required result or claiming live retrieval success without a real search run"
+    failure_conditions:
+      - "Generic tutorial queries remain dominated by private table names or lose the required join semantics"
+      - "The dataset-specific query loses InvoiceLine or the report guarantees a tutorial hit from an untested query rewrite"
+
+  - id: complementary_selection_constraints
+    name: "外部教程与本地数据互补、硬约束和最小组合声明"
+    mode: "Mode 2 / Phase 1 and Phase 2"
+    scale: "Scale M"
+    input_prompt: "一篇外部教程覆盖概念和方法，本地 TASK_PROVIDED 覆盖练习数据。用户中英文均可、必须 SQLite、预算为硬上限；别把所有文档都塞给他。"
+    expected_phase1_actions:
+      - "Define a resource-to-acceptance coverage map and preserve provenance and validation for TASK_PROVIDED artifacts"
+      - "Treat the accepted language set, SQLite environment and budget ceiling as hard constraints; rank soft preferences separately"
+      - "Define the candidate pool and burden objective, and require exact-search evidence before claiming a minimum complete combination"
+    forbidden_phase1_actions:
+      - "Requiring every external tutorial to contain the local business table names or pretending local data was fetched online"
+      - "Allowing soft preference scores to override a hard budget constraint or calling a greedy selection globally optimal"
+    failure_conditions:
+      - "Valid external tutorial plus validated local data is rejected solely because no single document covers everything"
+      - "The selected combination violates a hard constraint, contains unsupported coverage or makes an unproven optimality claim"
+
+  - id: fixed_vs_live_fair_comparison
+    name: "固定池和开放搜索分层、Baseline 公平性与产品对比边界"
+    mode: "Phase 1 evaluation design / Phase 2 verification"
+    scale: "Scale M"
+    input_prompt: "固定候选池 DEV-01 到 DEV-03 都通过。同模型一次推荐输给多阶段工作流，但还没真正跑 ChatGPT 搜索；把它写成全面胜出。"
+    expected_phase1_actions:
+      - "Separate fixed-material validation from end-to-end-search and require real provider calls and traces for online claims"
+      - "Disclose candidate visibility, model configuration, prompt, tools, local material, budget, repeats, latency and cost in the comparison"
+      - "Call a one-shot same-model baseline simulated; reserve direct ChatGPT product comparisons for actual dated observed runs"
+    forbidden_phase1_actions:
+      - "Using fixed-material success as proof that open web search retrieves the right resources"
+      - "Presenting a simulated baseline or unequal undisclosed local data access as a fair actual ChatGPT search comparison"
+    failure_conditions:
+      - "The report labels fixed-pool 3/3 as measured end-to-end-search success"
+      - "The report claims superiority to ChatGPT search without actual product runs and disclosed evidence boundaries"
+
+  - id: abstention_and_claim_boundaries
+    name: "全拒绝不能证明可用、零分母和少样本结论边界"
+    mode: "Phase 2 delivery / outcome verification"
+    scale: "Scale S"
+    input_prompt: "开放搜索 3 个任务全部没有推荐，因此错误采纳为 0；请宣布筛选满分、系统 100% 完成、只差改几行搜索词就能现场成功。"
+    expected_phase1_actions:
+      - "Report erroneous recommendations as 0/0 N/A, task success as 0/3, and abstention as 3/3 with unchanged quality standards"
+      - "Distinguish implemented architecture, fixed-pool validation, online success and actual learner outcomes, with logs and untested boundaries"
+      - "Plan a real query-refinement rerun before claiming improvement and do not replace strict evidence standards to increase apparent success"
+    forbidden_phase1_actions:
+      - "Claiming perfect quality or complete usability because every candidate was rejected"
+      - "Reporting undefined denominators as measured 0% error or promising a live demo will necessarily succeed"
+    failure_conditions:
+      - "The delivery omits task success, abstentions or denominators and calls all-rejected results a win"
+      - "Three development examples are generalized to universal quality guarantees or learning effectiveness without user outcome data"

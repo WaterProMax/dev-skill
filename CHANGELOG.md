@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 — Evidence-Driven Outcomes & Conditional Search Workflow Guidance
+
+- Added `references/evidence-driven-workflows.md`, loaded only for search/recommendation/RAG/AI evaluation tasks. It turns relevant user goals into purpose-specific acceptance items, source snapshot/span checks, semantic support checks, executable artifact assertions, bounded split retries, complementary external/local coverage and learner hard/soft constraints.
+- Added query abstraction guidance: remove task-specific table/column noise for general tutorials while preserving technical semantics and explicit dataset/API intent; log transformations and use bounded source relaxation rather than hardcoded golden URLs.
+- Defined fixed-material vs. live-search evaluation boundaries, fair baseline disclosure, zero-denominator handling, recommendation success/abstention alongside error, and evidence limits for optimality and real learner outcomes. Illustrative SQLite cases are not presented as measured project results.
+- Updated `SKILL.md`, task-plan and repository-rule templates with outcome/evidence checks; corrected the task template evaluator example to use `--scene phase2_delivery`.
+- Added five regression scenario specifications (11 total); structure validation now checks Markdown reference links and reports the actual case count. Documentation explicitly distinguishes schema checks, existing workspace self-tests and unexecuted AI/live-search behavior evaluations.
+
+---
+
 ## 1.1.0 — Verifiable Governance, Template Self-Consistency & Flexible Scale Adaptation
 
 Upgrades `WaterProMax/dev-skill` based on comprehensive engineering review of `00a0ad4`, focusing on **rule verifiability (`规则能否被验证`)** and **flexible project adaptation (`遇到不同项目时能否灵活适配`)**.

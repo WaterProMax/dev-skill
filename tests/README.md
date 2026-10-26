@@ -1,6 +1,6 @@
 # Skill Structural, Consistency & Behavioral Evaluation Suite (`dev-skill`)
 
-`dev-skill` (`v1.1.0`) uses a **two-layer verification architecture** so that rules are not merely checked for "text presence" but audited for internal template consistency, SQLite foreign-key enforcement, and real workspace behavior.
+`dev-skill` (`v1.2.0`) uses a **two-layer verification architecture** for internal template consistency, SQLite foreign-key enforcement, and bounded workspace checks. These checks do not establish general agent compliance or production workflow quality.
 
 | Layer | Script | What It Verifies |
 |---|---|---|
@@ -9,6 +9,8 @@
 | **Reproducible Invariant Suite** | `examples/minimal-repro/test_minimal_repro.py` | Zero-dependency `sqlite3` + `unittest` suite verifying foreign key constraints (`PRAGMA foreign_keys = ON`) and all 4 Business Invariants (`INV-1` atomic lock & `40901`, `INV-2` transaction failure rollback, `INV-3` targeted cancel lock release & `40903` terminal retry block, `INV-4` owner permission `40301` & `OFF_SHELF` `40902`). |
 
 ## Running All Checks
+
+`regression-cases.yaml` now defines 11 scenarios, including five conditional search/recommendation cases for source and executable evidence, query intent preservation, complementary selection and user constraints, fair fixed/live comparisons, and abstention/claim boundaries. Layer 1 validates the scenario definitions and links; it **does not run an agent, a search provider, or the recommendation workflow**. The existing Layer 2 self-tests execute workspace fixtures for the original three scenes only. To assess the new behavior, run the relevant prompts against an actual target project in an isolated workspace, retain artifacts/logs, and evaluate each stated failure condition; do not count schema validation as those scenarios passing.
 
 Run from the repository root:
 
