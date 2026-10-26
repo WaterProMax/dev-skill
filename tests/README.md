@@ -22,3 +22,36 @@ python3 tests/evaluate_workspace.py --self-test
 # 3. Reproducible Minimal Example (5 invariant tests on SQLite with PRAGMA foreign_keys = ON)
 python3 -m unittest discover -s examples/minimal-repro -v
 ```
+
+## Workspace evaluator limits and runtime plan
+
+Scene A accepts a non-empty Markdown exclusions section in either `AGENTS.md` or `docs/tasks/*.md`. Supported titles include `Non-Goals`, `不做项`, `非目标`, `明确不做`, and `长期边界`; an empty heading, HTML comment, or an unrelated mention of the keyword is insufficient. This is a document-structure check, not a semantic scope audit.
+
+Scene C no longer treats an unrelated passing suite as runtime acceptance. It requires `tests/verification.json` in the target workspace (override with `--verification-plan`, relative to that workspace), with a named initialization test and a mapping for every stable `INV-N` / `AC-N` ID found in the active contract:
+
+```json
+{
+  "initialization": {
+    "test": "test_app.T.test_init",
+    "targets": ["app/service.py:init"]
+  },
+  "contract_tests": {
+    "INV-1": {
+      "test": "test_app.T.test_tables_and_foreign_keys",
+      "targets": ["app/service.py:init"]
+    }
+  }
+}
+```
+
+The target workspace must supply the actual tests and plan; the evaluator does not generate a passing plan automatically. `test` is a Python `unittest` selector, resolved from the workspace and its `tests/` directory. `targets` lists relative production Python files and callable qualified names (for example `app/service.py:BookOrderService.create_order` on Python 3.11+). Each check runs in a fresh process, observes calls while the test executes, and rejects no tests, skipped/expected-failure tests, failed assertions, or missing declared production calls. Each subprocess has a 30-second timeout. Initialization tests should actually initialize the service and assert the resulting schema/environment; contract tests should assert the mapped behavior, including relevant failure paths.
+
+**Compatibility change:** missing plans, missing acceptance IDs, or incomplete mappings produce `UNVERIFIED` violations and a nonzero exit rather than PASS. This runtime probe currently supports in-process Python/unittest calls; HTTP clients, child-process services, other languages/frameworks and source-less/dynamically generated targets need a suitable external verification method and are not automatically certified. Target code/tests execute with the caller's permissions; use an authorized isolated workspace.
+
+Observed calls plus green assertions still do not prove the assertions adequately represent the contract. Review the mapping, test code and results; do not interpret PASS as complete service correctness. Static table/PRAGMA scans remain preliminary checks. This change does not address the separate Brownfield diff/whitelist heuristics.
+
+Run the targeted evaluator regressions (including the formerly green broken-initialization fixture and English/Chinese scope declarations):
+
+```bash
+python3 -m unittest discover -s tests -p 'test_evaluate_workspace.py' -v
+```
