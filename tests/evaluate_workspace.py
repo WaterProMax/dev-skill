@@ -98,6 +98,49 @@ def matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
     return False
 
 
+def scope_markdown_content(text: str) -> str:
+    """Exclude comments and fenced examples before interpreting scope headings."""
+    visible: list[str] = []
+    in_comment = False
+    fence: tuple[str, int] | None = None
+
+    def opening_fence(line: str) -> tuple[str, int] | None:
+        match = re.match(r"^ {0,3}(`{3,}|~{3,})([^\r\n]*)$", line.rstrip("\r\n"))
+        if match and not (match[1][0] == "`" and "`" in match[2]):
+            return match[1][0], len(match[1])
+        return None
+
+    for line in text.splitlines(keepends=True):
+        if fence:
+            marker, length = fence
+            if re.fullmatch(rf" {{0,3}}{re.escape(marker)}{{{length},}}[ \t]*", line.rstrip("\r\n")):
+                fence = None
+            continue
+        if not in_comment:
+            fence = opening_fence(line)
+            if fence:
+                continue
+        pieces: list[str] = []
+        remaining = line
+        while remaining:
+            if in_comment:
+                _, end, remaining = remaining.partition("-->")
+                if not end:
+                    break
+                in_comment = False
+            else:
+                before, start, remaining = remaining.partition("<!--")
+                pieces.append(before)
+                if not start:
+                    break
+                in_comment = True
+        cleaned = "".join(pieces)
+        fence = opening_fence(cleaned)
+        if not fence:
+            visible.append(cleaned)
+    return "".join(visible)
+
+
 def evaluate_scene_a_phase1_gate(workspace: Path) -> EvalResult:
     """Scene A: One-sentence Greenfield Phase 1 Gate check."""
     checks: list[str] = []
@@ -110,9 +153,9 @@ def evaluate_scene_a_phase1_gate(workspace: Path) -> EvalResult:
         scope_docs = [agents_md, *sorted(workspace.glob("docs/tasks/*.md"))]
         scope_found = False
         for doc in scope_docs:
-            text = doc.read_text(encoding="utf-8")
+            text = scope_markdown_content(doc.read_text(encoding="utf-8"))
             # Inspect a bounded Markdown section, not a keyword anywhere in prose.
-            headings = list(re.finditer(r"^(#{1,6})[ \t]+(.+)$", text, flags=re.M))
+            headings = list(re.finditer(r"^ {0,3}(#{1,6})[ \t]+(.+)$", text, flags=re.M))
             for index, heading in enumerate(headings):
                 title = heading.group(2)
                 if not re.search(r"Non[- ]Goals|不做项|非目标|明确不做|长期边界", title, re.I):
@@ -123,7 +166,7 @@ def evaluate_scene_a_phase1_gate(workspace: Path) -> EvalResult:
                         end = following.start()
                         break
                 body = text[heading.end():end]
-                body = re.sub(r"<!--.*?-->", "", body, flags=re.S)
+                body = re.sub(r"^ {0,3}#{1,6}[ \t]+.*$", "", body, flags=re.M)
                 if re.search(r"[A-Za-z0-9\u4e00-\u9fff]", body):
                     checks.append(f"Scope exclusions declared in {doc.relative_to(workspace)}")
                     scope_found = True
@@ -383,24 +426,34 @@ def run_runtime_check(check: dict) -> None:
     This observes execution, not assertion adequacy or full contract semantics.
     Run only in an authorized isolated workspace: target tests execute real code.
     """
+    import threading
     import unittest
 
     workspace = Path.cwd()
     validate_runtime_check(workspace, check)
     sys.path[:0] = [str(workspace), str(workspace / "tests")]
-    suite = unittest.defaultTestLoader.loadTestsFromName(check["test"])
     observed: set[tuple[str, str]] = set()
+    recording = False
 
     def profile(frame, event, arg):
-        if event == "call":
+        if recording and event == "call":
             code = frame.f_code
             observed.add((str(Path(code.co_filename).resolve()), getattr(code, "co_qualname", code.co_name)))
 
+    previous_profile = sys.getprofile()
+    previous_thread_profile = threading.getprofile()
+    # Install before test import so pools created by module fixtures are covered,
+    # but only count calls during unittest execution, not import-time setup.
+    threading.setprofile(profile)
     sys.setprofile(profile)
     try:
+        suite = unittest.defaultTestLoader.loadTestsFromName(check["test"])
+        recording = True
         result = unittest.TextTestRunner(verbosity=2).run(suite)
     finally:
-        sys.setprofile(None)
+        recording = False
+        sys.setprofile(previous_profile)
+        threading.setprofile(previous_thread_profile)
     missing = [target for target in check["targets"]
                if (str((workspace / target.rsplit(":", 1)[0]).resolve()), target.rsplit(":", 1)[1]) not in observed]
     if (not result.wasSuccessful() or result.testsRun == 0 or result.skipped

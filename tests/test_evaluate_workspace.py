@@ -77,6 +77,27 @@ class ScopeTests(unittest.TestCase):
                 self.assertFalse(result.passed)
                 self.assertTrue(any("scope exclusions" in v for v in result.violations))
 
+    def test_comment_wrapped_sections_do_not_declare_scope(self):
+        for closing in ["-->\n", ""]:
+            with self.subTest(closing=closing):
+                result = self.evaluate("# Rules\n<!--\n## Non-Goals\n- No payment.\n" + closing)
+                self.assertFalse(result.passed, result.checks)
+
+    def test_fenced_examples_do_not_declare_scope(self):
+        for marker in ["```", "````", "~~~"]:
+            with self.subTest(marker=marker):
+                example = f"# Rules\n{marker}markdown\n## Non-Goals\n- No payment.\n{marker}\n"
+                self.assertFalse(self.evaluate(example).passed)
+
+    def test_scope_requires_body_beyond_nested_headings(self):
+        result = self.evaluate("## Non-Goals\n### Pending details\n<!-- pending -->\n## Scope\n- Add orders\n")
+        self.assertFalse(result.passed)
+
+    def test_hidden_examples_do_not_hide_real_scope(self):
+        examples = "<!--\n## Non-Goals\n- Example only.\n-->\n```markdown\n## Scope\n<!-- literal comment\n```\n"
+        result = self.evaluate(examples, "   ## 本轮明确不做\n### 排除项\n- 本轮不实现支付。\n")
+        self.assertTrue(result.passed, result.violations)
+
 
 class RuntimeTests(unittest.TestCase):
     def setUp(self):
@@ -140,6 +161,55 @@ class RuntimeTests(unittest.TestCase):
         payload["initialization"]["targets"] = ["tests/test_app.py:T.test_unrelated"]
         plan.write_text(json.dumps(payload))
         self.assertFalse(self.evaluate().passed)
+
+    def threaded_test(self, warm_on_import=False):
+        setup = "pool = ThreadPoolExecutor(max_workers=1)\npool.submit(lambda: None).result()\n" if warm_on_import else ""
+        pool_expression = "pool" if warm_on_import else "ThreadPoolExecutor(max_workers=1)"
+        (self.ws / "tests/test_app.py").write_text(
+            "import unittest\nfrom concurrent.futures import ThreadPoolExecutor\nfrom app.service import init\n"
+            "def initialize_in_worker():\n"
+            "    conn = init()\n"
+            "    try:\n"
+            "        tables = {r[0] for r in conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")}\n"
+            "        return tables, conn.execute('PRAGMA foreign_keys').fetchone()[0]\n"
+            "    finally:\n        conn.close()\n"
+            + setup + "class T(unittest.TestCase):\n"
+            "    def test_unrelated(self):\n        self.assertEqual(1 + 1, 2)\n"
+            "    def test_init(self):\n"
+            f"        with {pool_expression} as executor:\n"
+            "            tables, fk = executor.submit(initialize_in_worker).result(timeout=5)\n"
+            "        self.assertEqual(tables, {'books', 'orders'})\n"
+            "        self.assertEqual(fk, 1)\n"
+        )
+
+    def test_real_initialization_in_worker_thread_passes(self):
+        self.threaded_test()
+        result = self.evaluate()
+        self.assertTrue(result.passed, result.violations)
+
+    def test_pool_created_during_import_is_observed_during_test(self):
+        self.threaded_test(warm_on_import=True)
+        result = self.evaluate()
+        self.assertTrue(result.passed, result.violations)
+
+    def test_threaded_schema_assertion_failure_is_rejected(self):
+        self.threaded_test()
+        service = self.ws / "app/service.py"
+        service.write_text(service.read_text().replace("CREATE TABLE orders (id INT)", "CREATE TABLE invoices (id INT)"))
+        result = self.evaluate()
+        self.assertFalse(result.passed)
+        self.assertTrue(any("AssertionError" in v for v in result.violations), result.violations)
+
+    def test_import_time_calls_do_not_satisfy_runtime_target(self):
+        (self.ws / "tests/test_app.py").write_text(
+            "import unittest\nfrom app.service import init\nconn = init()\nconn.close()\n"
+            "class T(unittest.TestCase):\n"
+            "    def test_unrelated(self):\n        self.assertEqual(1 + 1, 2)\n"
+        )
+        write_plan(self.ws, "test_app.T.test_unrelated")
+        result = self.evaluate()
+        self.assertFalse(result.passed)
+        self.assertTrue(any("missing calls" in v for v in result.violations), result.violations)
 
 
 if __name__ == "__main__":
