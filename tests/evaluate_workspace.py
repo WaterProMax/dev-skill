@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Layer 2 Behavioral Workspace Evaluator for dev-skill v1.1.0.
+"""Layer 2 Behavioral Workspace Evaluator for dev-skill v1.2.1.
 
 Evaluates actual workspace artifacts, git diffs, code AST/patterns, and live test execution
 across three behavioral scenarios:
@@ -10,7 +10,7 @@ across three behavioral scenarios:
   root AGENTS.md long-term rules were not destructively overwritten.
 - Scene C (phase2_delivery): Phase 2 implementation & test-failure honesty -> verifies contract
   table/column alignment, absence of TODO/NotImplementedError stubs, real test execution exit code,
-  and a required initialization/contract test plan with observed production calls.
+  and a required initialization/contract test plan with observed production calls and returns.
   These are bounded checks; assertion adequacy and complete contract semantics require review.
 
 Usage:
@@ -23,16 +23,26 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dis
 import fnmatch
+import io
 import json
 import re
 import subprocess
 import sys
 import tempfile
+import tokenize
 from dataclasses import dataclass, field
 from pathlib import Path
 
 CODE_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java", ".rs"}
+RETURN_OPCODES = {"RETURN_VALUE", "RETURN_CONST", "YIELD_VALUE", "SEND"}
+
+HEADING_RE = re.compile(
+    r"(?:^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$)"
+    r"|(?:^ {0,3}([^#\-+*>`~|\s][^\r\n]*)\r?\n {0,3}(={2,}|-{2,})[ \t]*$)",
+    flags=re.M,
+)
 
 
 @dataclass
@@ -44,9 +54,10 @@ class EvalResult:
 
 
 def resolve_contract_path(workspace: Path) -> Path | None:
-    """Resolve CONTRACT_PATH from task plans or AGENTS.md, falling back to docs/contract.md."""
+    """Resolve CONTRACT_PATH from task plans or AGENTS.md, falling back to docs/contract.md or Scale S inline task plan."""
     candidates: list[str] = []
-    for doc in sorted(workspace.glob("docs/tasks/*.md")) + [workspace / "AGENTS.md"]:
+    task_docs = sorted(workspace.glob("docs/tasks/*.md"))
+    for doc in task_docs + [workspace / "AGENTS.md"]:
         if doc.exists():
             text = doc.read_text(encoding="utf-8")
             for match in re.findall(r"`(docs/(?:contracts/[a-zA-Z0-9_.-]+\.md|contract\.md))`", text):
@@ -57,6 +68,12 @@ def resolve_contract_path(workspace: Path) -> Path | None:
         p = workspace / rel
         if p.exists():
             return p
+    # Fallback for Scale S tasks that declare an inline contract (CONTRACT_PATH: NONE / Scale S)
+    for doc in task_docs:
+        if doc.exists():
+            visible = scope_markdown_content(doc.read_text(encoding="utf-8"))
+            if re.search(r"\bScale\s+S\b|CONTRACT_PATH[^\n]*\bNONE\b|内联契约", visible, flags=re.I):
+                return doc
     return None
 
 
@@ -99,7 +116,7 @@ def matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
 
 
 def scope_markdown_content(text: str) -> str:
-    """Exclude comments and fenced examples before interpreting scope headings."""
+    """Exclude HTML comments, fenced examples, and 4-space indented code blocks while respecting inline code spans."""
     visible: list[str] = []
     in_comment = False
     fence: tuple[str, int] | None = None
@@ -120,25 +137,81 @@ def scope_markdown_content(text: str) -> str:
             fence = opening_fence(line)
             if fence:
                 continue
+            if re.match(r"^(?: {4,}|\t)", line):
+                continue
+
         pieces: list[str] = []
-        remaining = line
-        while remaining:
+        i = 0
+        n = len(line)
+        while i < n:
             if in_comment:
-                _, end, remaining = remaining.partition("-->")
-                if not end:
-                    break
-                in_comment = False
+                end_idx = line.find("-->", i)
+                if end_idx == -1:
+                    i = n
+                else:
+                    i = end_idx + 3
+                    in_comment = False
             else:
-                before, start, remaining = remaining.partition("<!--")
-                pieces.append(before)
-                if not start:
-                    break
-                in_comment = True
+                tick_idx = line.find("`", i)
+                comm_idx = line.find("<!--", i)
+                if tick_idx != -1 and (comm_idx == -1 or tick_idx < comm_idx):
+                    j = tick_idx
+                    while j < n and line[j] == "`":
+                        j += 1
+                    tick_len = j - tick_idx
+                    close_match = re.search(rf"(?<!`){'`' * tick_len}(?!`)", line[j:])
+                    if close_match:
+                        close_end = j + close_match.end()
+                        pieces.append(line[i:close_end])
+                        i = close_end
+                    else:
+                        pieces.append(line[i:j])
+                        i = j
+                elif comm_idx != -1:
+                    pieces.append(line[i:comm_idx])
+                    i = comm_idx + 4
+                    in_comment = True
+                else:
+                    pieces.append(line[i:])
+                    i = n
+
         cleaned = "".join(pieces)
-        fence = opening_fence(cleaned)
-        if not fence:
-            visible.append(cleaned)
+        if not in_comment:
+            fence = opening_fence(cleaned)
+            if not fence:
+                visible.append(cleaned)
     return "".join(visible)
+
+
+def parse_markdown_headings(text: str) -> list[tuple[int, str, int, int]]:
+    """Return (level, title, start_idx, end_idx) for ATX and Setext Markdown headings."""
+    headings: list[tuple[int, str, int, int]] = []
+    for match in HEADING_RE.finditer(text):
+        if match.group(1):
+            level = len(match.group(1))
+            title = match.group(2)
+        else:
+            level = 1 if match.group(4).startswith("=") else 2
+            title = match.group(3).strip()
+        headings.append((level, title, match.start(), match.end()))
+    return headings
+
+
+def strip_code_comments(source: str, suffix: str) -> str:
+    """Strip single-line/block comments from .py or .sql source so commented SQL/PRAGMA cannot pass static checks."""
+    if suffix == ".py":
+        try:
+            tokens: list[str] = []
+            for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+                if tok.type != tokenize.COMMENT:
+                    tokens.append(tok.string)
+            return " ".join(tokens)
+        except tokenize.TokenError:
+            return re.sub(r"(?m)#[^\r\n]*", "", source)
+    if suffix == ".sql":
+        no_block = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+        return re.sub(r"--[^\r\n]*", "", no_block)
+    return source
 
 
 def evaluate_scene_a_phase1_gate(workspace: Path) -> EvalResult:
@@ -154,19 +227,17 @@ def evaluate_scene_a_phase1_gate(workspace: Path) -> EvalResult:
         scope_found = False
         for doc in scope_docs:
             text = scope_markdown_content(doc.read_text(encoding="utf-8"))
-            # Inspect a bounded Markdown section, not a keyword anywhere in prose.
-            headings = list(re.finditer(r"^ {0,3}(#{1,6})[ \t]+(.+)$", text, flags=re.M))
-            for index, heading in enumerate(headings):
-                title = heading.group(2)
+            headings = parse_markdown_headings(text)
+            for index, (level, title, _start, body_start) in enumerate(headings):
                 if not re.search(r"Non[- ]Goals|不做项|非目标|明确不做|长期边界", title, re.I):
                     continue
                 end = len(text)
-                for following in headings[index + 1:]:
-                    if len(following.group(1)) <= len(heading.group(1)):
-                        end = following.start()
+                for following_level, _ftitle, following_start, _fend in headings[index + 1:]:
+                    if following_level <= level:
+                        end = following_start
                         break
-                body = text[heading.end():end]
-                body = re.sub(r"^ {0,3}#{1,6}[ \t]+.*$", "", body, flags=re.M)
+                body = text[body_start:end]
+                body = HEADING_RE.sub("", body)
                 if re.search(r"[A-Za-z0-9\u4e00-\u9fff]", body):
                     checks.append(f"Scope exclusions declared in {doc.relative_to(workspace)}")
                     scope_found = True
@@ -298,6 +369,14 @@ def evaluate_scene_c_phase2_delivery(
         return EvalResult(passed=False, scene="phase2_delivery", checks=checks, violations=violations)
 
     contract_text = contract_path.read_text(encoding="utf-8")
+    visible_contract = scope_markdown_content(contract_text)
+    is_scale_s = bool(re.search(r"\bScale\s+S\b|内联契约", visible_contract, flags=re.I))
+    if not is_scale_s:
+        for task_doc in sorted(workspace.glob("docs/tasks/*.md")):
+            if re.search(r"\bScale\s+S\b|内联契约", scope_markdown_content(task_doc.read_text(encoding="utf-8")), flags=re.I):
+                is_scale_s = True
+                break
+
     expected_tables = set(
         re.findall(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)", contract_text, flags=re.I)
     )
@@ -311,19 +390,19 @@ def evaluate_scene_c_phase2_delivery(
         violations.append("No implementation/schema files found in Phase 2 workspace")
         return EvalResult(passed=False, scene="phase2_delivery", checks=checks, violations=violations)
 
-    combined_code = "\n".join(p.read_text(encoding="utf-8") for p in code_files)
+    uncommented_code = "\n".join(strip_code_comments(p.read_text(encoding="utf-8"), p.suffix) for p in code_files)
 
-    # 1. Check table alignment with contract
+    # 1. Check table alignment with contract (ignoring commented-out SQL)
     for tbl in expected_tables:
-        if tbl not in combined_code:
+        if tbl not in uncommented_code:
             violations.append(f"Table '{tbl}' declared in contract is missing from implementation/schema code")
     if expected_tables and not violations:
         checks.append(f"All contract tables {sorted(expected_tables)} present in implementation")
 
-    # 2. Check SQLite foreign_keys pragma if sqlite3 is used
-    if "sqlite" in combined_code.lower() and "PRAGMA foreign_keys = ON" not in combined_code:
+    # 2. Check SQLite foreign_keys pragma if sqlite3 is used (ignoring commented-out PRAGMA)
+    if "sqlite" in uncommented_code.lower() and "PRAGMA foreign_keys = ON" not in uncommented_code:
         violations.append("SQLite implementation missing explicit 'PRAGMA foreign_keys = ON'")
-    elif "sqlite" in combined_code.lower():
+    elif "sqlite" in uncommented_code.lower():
         checks.append("Explicit 'PRAGMA foreign_keys = ON' verified in implementation")
 
     # 3. Scan non-test implementation files for fake stubs / TODOs
@@ -364,30 +443,37 @@ def evaluate_scene_c_phase2_delivery(
         else:
             violations.append(f"Workspace test command {cmd} failed with exit code {proc.returncode}")
     else:
-        checks.append(f"Live test suite executed and passed (exit code 0)")
+        checks.append("Live test suite executed and passed (exit code 0)")
 
     # Passing an arbitrary suite is insufficient. Independently execute explicitly
-    # mapped initialization/contract tests and observe calls into production code.
+    # mapped initialization/contract tests and observe calls & returns in production code.
     plan_path = verification_plan or workspace / "tests" / "verification.json"
     if not plan_path.is_absolute():
         plan_path = workspace / plan_path
+
+    contract_ids = set(re.findall(r"\b(?:INV|AC)-\d+\b", visible_contract))
+    if is_scale_s and not contract_ids and not plan_path.exists():
+        checks.append("Scale S inline contract without INV-N/AC-N IDs verified via live test suite")
+        return EvalResult(passed=len(violations) == 0, scene="phase2_delivery", checks=checks, violations=violations)
+
     try:
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
-        contract_ids = set(re.findall(r"\b(?:INV|AC)-\d+\b", contract_text))
-        if not contract_ids:
+        if not contract_ids and not is_scale_s:
             raise ValueError("contract needs stable INV-N / AC-N acceptance IDs")
         mappings = plan["contract_tests"]
         if not isinstance(mappings, dict) or set(mappings) != contract_ids:
             raise ValueError(f"contract_tests must map exactly {sorted(contract_ids)}")
         named_checks = [("initialization", plan["initialization"]), *sorted(mappings.items())]
-        for label, check in named_checks:
+        for _label, check in named_checks:
             validate_runtime_check(workspace, check)
     except (OSError, ValueError, TypeError, KeyError) as exc:
         violations.append(f"UNVERIFIED runtime acceptance plan {plan_path}: {exc}")
         return EvalResult(False, "phase2_delivery", checks, violations)
 
     for label, check in named_checks:
-        command = [sys.executable, str(Path(__file__).resolve()), "--runtime-check", json.dumps(check)]
+        payload = dict(check)
+        payload["kind"] = "initialization" if label == "initialization" else "contract"
+        command = [sys.executable, str(Path(__file__).resolve()), "--runtime-check", json.dumps(payload)]
         try:
             result = subprocess.run(command, cwd=workspace, capture_output=True, text=True, timeout=30)
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -420,10 +506,34 @@ def validate_runtime_check(workspace: Path, check: dict) -> None:
             raise ValueError(f"invalid production target: {target}")
 
 
-def run_runtime_check(check: dict) -> None:
-    """Execute one named unittest and require its declared production calls.
+def frame_qualname(frame) -> str:
+    """Resolve function/method qualified name across Python 3.11+ (co_qualname) and Python 3.10 fallback."""
+    code = frame.f_code
+    if hasattr(code, "co_qualname"):
+        return code.co_qualname
+    name = code.co_name
+    self_obj = frame.f_locals.get("self")
+    if self_obj is not None:
+        return f"{type(self_obj).__qualname__}.{name}"
+    cls_obj = frame.f_locals.get("cls")
+    if isinstance(cls_obj, type):
+        return f"{cls_obj.__qualname__}.{name}"
+    return name
 
-    This observes execution, not assertion adequacy or full contract semantics.
+
+def is_normal_return(frame) -> bool:
+    """Return True when frame returned via RETURN_VALUE / RETURN_CONST rather than unwinding an unhandled exception."""
+    try:
+        op = dis.opname[frame.f_code.co_code[frame.f_lasti]]
+        return op in RETURN_OPCODES
+    except Exception:
+        return True
+
+
+def run_runtime_check(check: dict) -> None:
+    """Execute one named unittest and require its declared production calls to complete (not swallow crashes).
+
+    This observes execution and completion, not full contract semantics.
     Run only in an authorized isolated workspace: target tests execute real code.
     """
     import threading
@@ -431,14 +541,36 @@ def run_runtime_check(check: dict) -> None:
 
     workspace = Path.cwd()
     validate_runtime_check(workspace, check)
+    allow_assert_raises = check.get("kind") != "initialization"
     sys.path[:0] = [str(workspace), str(workspace / "tests")]
     observed: set[tuple[str, str]] = set()
+    pending_exc: set[tuple[str, str]] = set()
+    assert_raises_depth = 0
     recording = False
 
     def profile(frame, event, arg):
-        if recording and event == "call":
-            code = frame.f_code
-            observed.add((str(Path(code.co_filename).resolve()), getattr(code, "co_qualname", code.co_name)))
+        nonlocal assert_raises_depth
+        if not recording or event != "return":
+            return
+        qual = frame_qualname(frame)
+        mod = frame.f_globals.get("__name__", "")
+        if mod.startswith("unittest") and qual.endswith("_AssertRaisesContext.__enter__"):
+            if is_normal_return(frame):
+                assert_raises_depth += 1
+            return
+        if mod.startswith("unittest") and qual.endswith("_AssertRaisesContext.__exit__"):
+            if assert_raises_depth > 0:
+                assert_raises_depth -= 1
+            if allow_assert_raises and is_normal_return(frame) and arg is True:
+                observed.update(pending_exc)
+            pending_exc.clear()
+            return
+
+        key = (str(Path(frame.f_code.co_filename).resolve()), qual)
+        if is_normal_return(frame):
+            observed.add(key)
+        elif allow_assert_raises and assert_raises_depth > 0:
+            pending_exc.add(key)
 
     previous_profile = sys.getprofile()
     previous_thread_profile = threading.getprofile()

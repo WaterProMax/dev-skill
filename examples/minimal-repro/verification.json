@@ -1,0 +1,40 @@
+{
+  "initialization": {
+    "test": "test_minimal_repro.MinimalReproInvariantTests.test_01_sqlite_foreign_key_enforced",
+    "targets": [
+      "book_order_service.py:create_connection",
+      "book_order_service.py:init_db"
+    ]
+  },
+  "contract_tests": {
+    "INV-1": {
+      "test": "test_minimal_repro.MinimalReproInvariantTests.test_02_inv1_atomic_lock_and_duplicate_order_rejected_40901",
+      "targets": [
+        "book_order_service.py:BookOrderService.publish_book",
+        "book_order_service.py:BookOrderService.create_order"
+      ]
+    },
+    "INV-2": {
+      "test": "test_minimal_repro.MinimalReproInvariantTests.test_03_inv2_transaction_rollback_on_order_failure",
+      "targets": [
+        "book_order_service.py:BookOrderService.publish_book",
+        "book_order_service.py:BookOrderService.create_order"
+      ]
+    },
+    "INV-3": {
+      "test": "test_minimal_repro.MinimalReproInvariantTests.test_04_inv3_cancel_releases_only_target_book_and_blocks_terminal_retry_40903",
+      "targets": [
+        "book_order_service.py:BookOrderService.create_order",
+        "book_order_service.py:BookOrderService.transition_order"
+      ]
+    },
+    "INV-4": {
+      "test": "test_minimal_repro.MinimalReproInvariantTests.test_05_inv4_authorization_40301_and_self_purchase_40002_and_offshelf_40902",
+      "targets": [
+        "book_order_service.py:BookOrderService.change_shelf_status",
+        "book_order_service.py:BookOrderService.create_order",
+        "book_order_service.py:BookOrderService.transition_order"
+      ]
+    }
+  }
+}

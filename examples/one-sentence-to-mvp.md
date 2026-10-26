@@ -9,7 +9,7 @@
 
 ---
 
-## 0. 对比：没有 `dev-skill` vs 启用 `dev-skill` (`v1.1.0`)
+## 0. 对比：没有 `dev-skill` vs 启用 `dev-skill` (`v1.2.1`)
 
 | 维度 | ❌ 没有 `dev-skill`（常见翻车现场） | ✅ 启用 `dev-skill`（本案例流程） |
 |---|---|---|

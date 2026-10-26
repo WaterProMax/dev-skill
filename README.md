@@ -1,4 +1,4 @@
-# Dev Skill (`dev-skill` `v1.2.0`)
+# Dev Skill (`dev-skill` `v1.2.1`)
 
 > **开发 Skill — 从「一句话需求」或「已有仓库扩模块」到任务规模分流（Scale L/M/S）、`AGENTS.md` 长期规则、当轮任务白名单、自洽数据/接口契约与业务不变量验收的工程治理流程**  
 > **Contract-First MVP & Scoped Development Skill for AI-Assisted Engineering**
@@ -14,7 +14,7 @@
 
 ---
 
-## `v1.2.0` 核心机制一览
+## `v1.2.1` 核心机制一览
 
 ### 1. 双模式 × 三级规模路由（拒绝所有小改动都硬套重型后端模板）
 
@@ -26,7 +26,7 @@
 
 ### 2. `AGENTS.md` 长期规则与当轮任务单（`docs/tasks/<task>.md`）解耦
 - **`AGENTS.md`（`templates/AGENTS.template.md`）**：只管仓库级长期规范（技术栈、分层职责、权威真源优先级、全局环境与编码红线）。已有仓库扩模块时 **严禁重写覆盖全局 `AGENTS.md`**。
-- **`docs/tasks/<task-slug>.md`（`templates/task-plan.template.md`）**：单独保存当轮任务的 `In-Scope`、`Non-Goals`、`File Whitelist`（含 `requirements.txt` 等依赖文件）、`CONTRACT_PATH` 指针与三步校验命令，多人协作互不覆盖。
+- **`docs/tasks/<task-slug>.md`（`templates/task-plan.template.md`）**：单独保存当轮任务的 `In-Scope`、`Non-Goals`、`File Whitelist`（含 `requirements.txt` 与 `tests/verification.json`）、`CONTRACT_PATH` 指针与三步校验命令，多人协作互不覆盖。
 
 ### 3. 100% 自洽契约模板 + 三级保证层（Enforcement Layer）+ 四大业务不变量
 在 `templates/contract.template.md` 中：
@@ -48,7 +48,7 @@
 
 ---
 
-## 搜索 / 推荐 / RAG 任务的结果验收（`v1.2.0`）
+## 搜索 / 推荐 / RAG 任务的结果验收（`v1.2.1`）
 
 这类任务除原有工程契约外，按需读取 [证据驱动工作流指南](references/evidence-driven-workflows.md)，把“接口跑通”进一步落实为“结果满足用户需求”：
 
@@ -70,7 +70,7 @@
 注意硬门禁要求：
 1. 现在处于 Phase 1（契约对齐阶段），在我确认之前，严禁编写任何业务实现代码！
 2. 请先参考 `templates/AGENTS.template.md`、`templates/task-plan.template.md` 和 `templates/contract.template.md`，生成：
-   - 根目录 `AGENTS.md` 与当轮任务单 `docs/tasks/mvp-init.md`（明确 `CONTRACT_PATH`、MVP 动作与 Non-Goals、完整文件白名单、分步校验命令）
+   - 根目录 `AGENTS.md` 与当轮任务单 `docs/tasks/mvp-init.md`（明确 `CONTRACT_PATH`、MVP 动作与 Non-Goals、含 `tests/verification.json` 的完整文件白名单、分步校验命令）
    - `docs/contract.md`（包含：标注保证层 Enforcement Layer 的表字段字典、含 OFF_SHELF 的完整状态流转表、开启 PRAGMA foreign_keys = ON 的可执行建表 SQL、INV-1~INV-4 业务不变量与权限规则、REST 接口与错误码字典）
 3. 输出契约后请立即停下，向我列出需要确认的关键问题，等我回复“确认”后再进入 Phase 2 分步写代码。
 ```
@@ -84,8 +84,8 @@
 注意硬门禁要求：
 1. 请先盘点当前仓库的真实目录、依赖版本、已有 OpenAPI/迁移文件与统一响应封装，优先复用现有规范；保留根 `AGENTS.md` 原有长期规则，切勿重写覆盖！
 2. 现在处于 Phase 1（契约对齐阶段），在我确认之前，严禁修改任何业务代码！
-3. 请先新建独立任务单 `docs/tasks/<module>.md`（锁死本次允许新建/修改的【File Whitelist】）和模块契约 `docs/contracts/<module>-contract.md`。
-4. 输出后立即停下等我确认；确认后再按 Step 1 → Step 2（含并发/事务回滚/越权 40301/终态 40903 测试）→ Step 3 推进。
+3. 请先新建独立任务单 `docs/tasks/<module>.md`（锁死本次允许新建/修改的【File Whitelist】，包含 `tests/verification.json`）和模块契约 `docs/contracts/<module>-contract.md`。
+4. 输出后立即停下等我确认；确认后再按 Step 1 → Step 2（含并发/事务回滚/越权 40301/终态 40903 测试及 `tests/verification.json` 映射）→ Step 3 推进。
 ```
 
 ### 场景 C：Phase 1 契约确认后，放行进入 Phase 2
@@ -94,7 +94,7 @@
 Phase 1 的任务单与契约文件我已确认通过。
 现在请进入 `dev-skill` 的 Phase 2：
 1. 严格遵守文件白名单与契约定义（100% 对齐；若遇 L3 级字段/状态机/范围变更必须先停下请我重确认，严禁私自改契约）；
-2. 依次执行 Step 1（环境/Schema/外键开启校验）→ Step 2（核心业务与 INV-1~INV-4 不变量测试）→ Step 3（端到端冒烟验证），如实贴出真实终端输出（若测试失败严禁宣称完成）。
+2. 依次执行 Step 1（环境/Schema/外键开启校验）→ Step 2（核心业务与 INV-1~INV-4 不变量测试，并维护 `tests/verification.json`）→ Step 3（端到端冒烟验证），如实贴出真实终端输出（若测试失败严禁宣称完成）。
 ```
 
 ---
@@ -105,12 +105,12 @@ Phase 1 的任务单与契约文件我已确认通过。
 dev-skill/
 ├── SKILL.md                             # Skill 核心入口：Mode×Scale 路由、长期/当轮解耦、Phase 1/2、L1/L2/L3 变更协议、INV-1~4
 ├── README.md                            # 面向队友/新手的仓库说明与一键复制调用话术
-├── CHANGELOG.md                         # 版本演进记录（v1.0.0 -> v1.2.0）
+├── CHANGELOG.md                         # 版本演进记录（v1.0.0 -> v1.2.1）
 ├── references/
 │   └── evidence-driven-workflows.md     # 搜索/推荐/AI 任务按需读取：证据、查询提纯、分层评测
 ├── templates/                           # 标准契约与任务单模板
 │   ├── AGENTS.template.md               # 仓库级长期总控规则模板（含真源层级、L1/L2/L3 协议、完整白名单）
-│   ├── task-plan.template.md            # 当轮任务单模板 docs/tasks/<task>.md（含 Scale L/M/S、File Whitelist、验收计划）
+│   ├── task-plan.template.md            # 当轮任务单模板 docs/tasks/<task>.md（含 Scale L/M/S、File Whitelist、verification.json 规范）
 │   └── contract.template.md             # 100% 自洽契约模板（含保证层、SQLite 外键开启、OFF_SHELF 流转、INV-1~4 不变量）
 ├── examples/                            # 端到端实战示范与最小可运行复现代码
 │   ├── one-sentence-to-mvp.md           # 完整两轮交互示范（显式标注演示格式与复现证据边界）
@@ -118,12 +118,14 @@ dev-skill/
 │       ├── README.md
 │       ├── schema.sql
 │       ├── book_order_service.py
-│       └── test_minimal_repro.py
+│       ├── test_minimal_repro.py
+│       └── verification.json            # INV-1~INV-4 与 initialization 的真实单测及生产目标映射
 └── tests/                               # 两层验证体系（静态一致性审计 + 沙盒行为评测器）
     ├── README.md
     ├── regression-cases.yaml            # 11 个回归场景规范（Schema 校验，不自动执行 Agent）
     ├── validate_structure.py            # 第 1 层：结构、YAML 完整性、模板索引/状态机/SQLite 外键自洽审计
-    └── evaluate_workspace.py            # 第 2 层：针对目标工作区的 Phase 1 门禁、白名单 git diff、反假桩与测试诚实度评测
+    ├── evaluate_workspace.py            # 第 2 层：针对目标工作区的 Phase 1 门禁、白名单 git diff、反假桩与运行时探针评测
+    └── test_evaluate_workspace.py       # 针对第 2 层评测器的 26 项单元与对抗性回归测试
 ```
 
 ---
@@ -134,8 +136,9 @@ dev-skill/
 # 1. 第 1 层：结构、YAML 深度 Schema 与模板自洽性审计（含 SQLite 内存建表与外键拦截实测）
 python3 tests/validate_structure.py
 
-# 2. 第 2 层：行为评测器正反例沙盒自测（覆盖一句话立项拦截、已有仓库白名单 git diff、测试失败谎报拦截）
+# 2. 第 2 层：行为评测器正反例沙盒自测 + 26 项定向与对抗回归测试
 python3 tests/evaluate_workspace.py --self-test
+python3 -m unittest discover -s tests -p 'test_evaluate_workspace.py' -v
 
 # 3. 最小可运行复现示例（验证外键约束 + INV-1~INV-4 全部 5 项业务不变量测试）
 python3 -m unittest discover -s examples/minimal-repro -v

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Layer 1 Validator for dev-skill v1.2.0:
-1. Repository file & relative reference integrity
-2. SKILL.md frontmatter & routing/protocol markers (Scale L/M/S, L1/L2/L3, INV-1..INV-4)
+"""Layer 1 Validator for dev-skill v1.2.1:
+1. Repository file & relative reference integrity across all Markdown documents
+2. SKILL.md frontmatter & routing/protocol markers (Scale L/M/S, L1/L2/L3, INV-1..INV-4, verification.json)
 3. Deep YAML parsing & schema validation of tests/regression-cases.yaml
    (blocks skeleton-only case IDs when inputs/actions/failure_conditions are removed)
 4. Automated Template Self-Consistency Audit:
@@ -10,11 +10,13 @@
    - ISBN length/validation rule consistency across Field Dictionary, SQL DDL, and API Spec
    - Enforcement Layer (DB Constraint / Request Validation / Service Invariant) coverage
    - Live SQLite execution of template DDL + PRAGMA foreign_keys = ON enforcement test
-   - AGENTS.template.md File Whitelist completeness (including requirements.txt & CONTRACT_PATH)
+   - AGENTS.template.md & task-plan.template.md File Whitelist completeness (requirements.txt, verification.json, CONTRACT_PATH)
+   - references/evidence-driven-workflows.md conditional workflow markers & examples/minimal-repro/verification.json schema
 """
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 import sys
@@ -35,9 +37,11 @@ REQUIRED_FILES = [
     ROOT / "examples" / "minimal-repro" / "schema.sql",
     ROOT / "examples" / "minimal-repro" / "book_order_service.py",
     ROOT / "examples" / "minimal-repro" / "test_minimal_repro.py",
+    ROOT / "examples" / "minimal-repro" / "verification.json",
     ROOT / "tests" / "README.md",
     ROOT / "tests" / "regression-cases.yaml",
     ROOT / "tests" / "evaluate_workspace.py",
+    ROOT / "tests" / "test_evaluate_workspace.py",
     ROOT / "references" / "evidence-driven-workflows.md",
 ]
 
@@ -338,9 +342,10 @@ def audit_template_consistency(contract_tpl: str, agents_tpl: str, task_tpl: str
     finally:
         conn.close()
 
-    # 1g. Audit AGENTS.template.md & task-plan.template.md completeness
+    # 1g. Audit AGENTS.template.md & task-plan.template.md completeness (including verification.json)
     for marker in (
         "requirements.txt",
+        "verification.json",
         "CONTRACT_PATH",
         "TASK_PLAN_PATH",
         "PRAGMA foreign_keys = ON",
@@ -351,7 +356,7 @@ def audit_template_consistency(contract_tpl: str, agents_tpl: str, task_tpl: str
         if marker not in agents_tpl:
             fail(f"templates/AGENTS.template.md missing required marker: {marker}")
 
-    for marker in ("TASK_ID", "SCALE", "CONTRACT_PATH", "File Whitelist", "Scale S"):
+    for marker in ("TASK_ID", "SCALE", "CONTRACT_PATH", "File Whitelist", "Scale S", "tests/verification.json"):
         if marker not in task_tpl:
             fail(f"templates/task-plan.template.md missing required marker: {marker}")
 
@@ -370,6 +375,27 @@ def self_test_yaml_mutation_guard(original_yaml: str) -> None:
         fail("Mutation guard failed: skeleton-only regression-cases.yaml with just IDs passed validation!")
     if any("Missing required regression case id:" in err for err in errs):
         fail("Mutation fixture lost case IDs instead of testing missing substantive fields")
+
+
+def validate_markdown_links() -> None:
+    """Validate relative file links across all repository Markdown documents."""
+    md_files = [
+        ROOT / "SKILL.md",
+        ROOT / "README.md",
+        ROOT / "CHANGELOG.md",
+        ROOT / "tests" / "README.md",
+        ROOT / "references" / "evidence-driven-workflows.md",
+        ROOT / "examples" / "one-sentence-to-mvp.md",
+        ROOT / "examples" / "minimal-repro" / "README.md",
+    ]
+    for md_path in md_files:
+        text = md_path.read_text(encoding="utf-8")
+        for ref in re.findall(r"\]\(([^)]+)\)", text):
+            if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", ref) or ref.startswith("#"):
+                continue
+            target = (md_path.parent / ref.split("#", 1)[0]).resolve()
+            if not target.exists():
+                fail(f"{md_path.relative_to(ROOT)} links to non-existent path: {ref}")
 
 
 def main() -> None:
@@ -395,7 +421,7 @@ def main() -> None:
     if len(description) > 500:
         fail(f"SKILL.md description exceeds 500 chars ({len(description)} chars)")
 
-    # 2. Check core sections and v1.1.0 markers in SKILL.md
+    # 2. Check core sections and v1.2.1 markers in SKILL.md
     required_skill_markers = [
         "Mode 1",
         "Mode 2",
@@ -420,35 +446,51 @@ def main() -> None:
         "PRAGMA foreign_keys = ON",
         "40301",
         "40903",
+        "tests/verification.json",
         "Pre-Completion Verification Checklist",
     ]
     missing_skill = [m for m in required_skill_markers if m not in skill_text]
     if missing_skill:
-        fail(f"SKILL.md missing required v1.1.0 markers: {missing_skill}")
+        fail(f"SKILL.md missing required v1.2.1 markers: {missing_skill}")
 
-    # 3. Check relative file references in SKILL.md
+    # 3. Check relative file references in SKILL.md and Markdown links across docs
     for ref in re.findall(
         r"`((?:templates|examples|tests|references)/[^`<>]+|CHANGELOG\.md)`",
         skill_text,
     ):
         ref_clean = ref.split()[0]
+        if ref_clean == "tests/verification.json" or "*" in ref_clean:
+            continue
         if not (ROOT / ref_clean).exists():
             fail(f"SKILL.md references non-existent path: {ref_clean}")
 
-    # Also validate Markdown links, including the conditional workflow reference.
-    for ref in re.findall(r"\]\(([^)]+)\)", skill_text):
-        if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", ref) or ref.startswith("#"):
-            continue
-        if not (ROOT / ref.split("#", 1)[0]).exists():
-            fail(f"SKILL.md links to non-existent path: {ref}")
+    validate_markdown_links()
 
-    # 4. Audit templates consistency & live SQLite execution
+    # 4. Audit references/evidence-driven-workflows.md and examples/minimal-repro/verification.json
+    ref_workflow_text = (ROOT / "references" / "evidence-driven-workflows.md").read_text(encoding="utf-8")
+    for marker in (
+        "acceptanceItems",
+        "quoteStart",
+        "quoteEnd",
+        "TASK_PROVIDED",
+        "fixed-material",
+        "end-to-end-search",
+        "N/A",
+    ):
+        if marker not in ref_workflow_text:
+            fail(f"references/evidence-driven-workflows.md missing required marker: {marker}")
+
+    repro_plan = json.loads((ROOT / "examples" / "minimal-repro" / "verification.json").read_text(encoding="utf-8"))
+    if "initialization" not in repro_plan or set(repro_plan.get("contract_tests", {})) != {"INV-1", "INV-2", "INV-3", "INV-4"}:
+        fail("examples/minimal-repro/verification.json must map initialization and INV-1..INV-4")
+
+    # 5. Audit templates consistency & live SQLite execution
     agents_tpl = (ROOT / "templates" / "AGENTS.template.md").read_text(encoding="utf-8")
     task_tpl = (ROOT / "templates" / "task-plan.template.md").read_text(encoding="utf-8")
     contract_tpl = (ROOT / "templates" / "contract.template.md").read_text(encoding="utf-8")
     audit_template_consistency(contract_tpl, agents_tpl, task_tpl)
 
-    # 5. Check examples/one-sentence-to-mvp.md evidence boundary & alignment
+    # 6. Check examples/one-sentence-to-mvp.md evidence boundary & alignment
     example_text = (ROOT / "examples" / "one-sentence-to-mvp.md").read_text(encoding="utf-8")
     for marker in [
         "证据边界声明",
@@ -467,7 +509,7 @@ def main() -> None:
         if marker not in example_text:
             fail(f"examples/one-sentence-to-mvp.md missing marker: {marker}")
 
-    # 6. Deep validate regression-cases.yaml + mutation self-test
+    # 7. Deep validate regression-cases.yaml + mutation self-test
     cases_text = (ROOT / "tests" / "regression-cases.yaml").read_text(encoding="utf-8")
     schema_errors = validate_regression_cases_schema(cases_text)
     if schema_errors:
@@ -475,7 +517,7 @@ def main() -> None:
     self_test_yaml_mutation_guard(cases_text)
 
     print("PASS [Layer 1.1]: Repository structure, SKILL.md frontmatter, Scale L/M/S & L1/L2/L3 routers verified")
-    print("PASS [Layer 1.2]: Template Consistency Audit passed (9/9 indexes, 7/7 states incl. OFF_SHELF, ISBN 10~20, Enforcement Layers)")
+    print("PASS [Layer 1.2]: Template Consistency Audit passed (9/9 indexes, 7/7 states incl. OFF_SHELF, ISBN 10~20, Enforcement Layers, verification.json)")
     print("PASS [Layer 1.3]: Live SQLite DDL execution & PRAGMA foreign_keys = ON integrity check passed")
     case_count = len(parse_regression_yaml(cases_text)["cases"])
     print(f"PASS [Layer 1.4]: Deep YAML schema check & skeleton-ID mutation guard passed for all {case_count} regression cases (definitions only; not agent execution)")

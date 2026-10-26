@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.1 — Evaluator Adversarial Hardening, Template Alignment & Scale S Inline Contract Support
+
+- **Template & Skill Alignment for `tests/verification.json`**: Explicitly documented `tests/verification.json` in `SKILL.md` (Phase 2 execution & pre-completion checklist), `templates/task-plan.template.md` (§3.1 File Whitelist and §5.1 runtime verification mapping), and `templates/AGENTS.template.md` (§2.3 directory tree and §4.1 File Whitelist), and bundled a live-verified `examples/minimal-repro/verification.json` mapping `initialization` and `INV-1`..`INV-4` to `test_minimal_repro.py` and `book_order_service.py`.
+- **Inline-Backtick & Heading Hardening in `scope_markdown_content` (`tests/evaluate_workspace.py`)**: Fixed HTML comment parsing so inline code spans containing literal comment openers (`` `<!--` `` or ```` ``<!--`` ````) never swallow subsequent `## Non-Goals` sections; excluded 4-space/tab indented code blocks from declaring fake scope sections; added Setext heading (`===` / `---`) support alongside ATX (`#`) headings.
+- **Scale S Inline Contract & Comment-Filtered Contract IDs (`tests/evaluate_workspace.py`)**: `resolve_contract_path` now falls back to `docs/tasks/<task>.md` when a `Scale S` task declares an inline contract (`CONTRACT_PATH: NONE (Scale S 内联契约)`); `evaluate_scene_c_phase2_delivery` strips Markdown comments and fenced code blocks via `scope_markdown_content` before extracting `INV-N` / `AC-N` IDs so commented/example IDs (`<!-- INV-99 -->`) do not trigger false `UNVERIFIED` failures.
+- **Anti-Bypass Hardening for Static SQL/PRAGMA Scan & Runtime Call Probe (`tests/evaluate_workspace.py`)**:
+  - Stripped Python `#` comments (via `tokenize`) and SQL `--` / `/* */` comments before checking contract table presence and `PRAGMA foreign_keys = ON`, blocking `# PRAGMA foreign_keys = ON` comment spoofing.
+  - Hardened `run_runtime_check` to verify bytecode normal returns (`RETURN_VALUE` / `RETURN_CONST`) on `event == "return"` (or explicit `unittest.TestCase.assertRaises` verification on contract checks), blocking broken targets that raise immediately while a test swallows the exception with `try: ... except: pass`.
+  - Added Python 3.10 qualified-name fallback (`self` / `cls` inspection when `co_qualname` is absent).
+- **Expanded Verification Suite (`tests/validate_structure.py`, `tests/test_evaluate_workspace.py`)**: Added `tests/test_evaluate_workspace.py` and `examples/minimal-repro/verification.json` to `REQUIRED_FILES`, audited `references/evidence-driven-workflows.md` markers and Markdown links across all repository docs, and expanded `tests/test_evaluate_workspace.py` from 18 to 26 tests.
+
+---
+
 ## 1.2.0 — Evidence-Driven Outcomes & Conditional Search Workflow Guidance
 
 - Added `references/evidence-driven-workflows.md`, loaded only for search/recommendation/RAG/AI evaluation tasks. It turns relevant user goals into purpose-specific acceptance items, source snapshot/span checks, semantic support checks, executable artifact assertions, bounded split retries, complementary external/local coverage and learner hard/soft constraints.

@@ -1,4 +1,4 @@
-"""Minimal reproducible reference implementation for dev-skill v1.1.0.
+"""Minimal reproducible reference implementation for dev-skill v1.2.1.
 
 Enforces:
 - SQLite per-connection foreign key pragma (PRAGMA foreign_keys = ON)

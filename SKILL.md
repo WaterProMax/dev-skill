@@ -14,7 +14,6 @@ Alongside `drawing-skill` (architecture/mechanism diagrams) and `writing-skill` 
 > **1. Contract Gate before business code (`契约先行，点头再动代码`).** Never write business code directly from a vague request. First converge scope, architecture, file whitelist, and contracts (`AGENTS.md` + `docs/tasks/<task>.md` + `CONTRACT_PATH`), then stop for human confirmation.
 > **2. Contract is the single source of truth (`契约即唯一真相，分级变更重确认`).** Table names, column names, state enums, invariants, route paths, and I/O schemas in code must match `CONTRACT_PATH` 100%. Behavioral or scope changes (L3) require human re-confirmation before editing code.
 > **3. Stepwise execution with real verification (`小步快跑，真实命令与不变量验收`).** Build in verifiable steps and execute real verification commands covering happy paths, concurrency/transaction invariants, and authorization/error boundaries.
-
 > **4. Evidence-backed outcomes (`验收可用结果，而非仅验证链路跑通`).** Define observable acceptance items and their evidence before implementation. Passing a few examples establishes those cases only; report sample size, failures, abstentions, and remaining gaps instead of unsupported completion percentages.
 
 **Violating the letter of the Phase 1 Contract Gate is violating the spirit of this skill.**
@@ -83,11 +82,11 @@ To prevent multi-module collaboration in existing repositories from overwriting 
    - Tech stack, architectural layering, unified response/error envelope, global environment variables, and permanent coding red lines.
    - **Brownfield Preservation Rule**: If `AGENTS.md` already exists, **keep its existing constraints intact** and make only minimal incremental additions when global conventions change. Never rewrite the entire project's `AGENTS.md` for a single submodule task.
 2. **`docs/tasks/<task-slug>.md` holds the Current Task Plan (`当轮任务范围、白名单与验收条件`)**:
-   - Use `templates/task-plan.template.md` to store the current iteration's MVP `In-Scope` / `Non-Goals`, **File Whitelist** (including dependency files like `requirements.txt` or `package.json` if dependencies change), explicit `CONTRACT_PATH` pointer, phase status, and step verification commands.
+   - Use `templates/task-plan.template.md` to store the current iteration's MVP `In-Scope` / `Non-Goals`, **File Whitelist** (including dependency files like `requirements.txt` or `package.json` if dependencies change, and `tests/verification.json` when runtime invariant mapping is used), explicit `CONTRACT_PATH` pointer, phase status, and step verification commands.
    - *(Note: For a standalone single-module Mode 1 exercise, the task plan block may either live in `docs/tasks/mvp-init.md` or be embedded in `AGENTS.md` §5, provided `CONTRACT_PATH` and the File Whitelist are explicitly declared.)*
 3. **Reuse Existing Authoritative Specs (`复用已有权威契约与真源层级`)**:
    - If the repository already maintains OpenAPI/Swagger specs, SQL/Alembic/Prisma migrations, or shared protobuf/schema files, **reuse them first** and declare the **Source of Truth Hierarchy (`权威真源层级`)** in `AGENTS.md` and `docs/tasks/<task-slug>.md` instead of creating conflicting duplicate schemas.
-   - Always reference the active contract via a single explicit `CONTRACT_PATH` (e.g., `docs/contract.md` for single-module projects or `docs/contracts/<module>-contract.md` for multi-module repositories).
+   - Always reference the active contract via a single explicit `CONTRACT_PATH` (e.g., `docs/contract.md` for single-module projects, `docs/contracts/<module>-contract.md` for multi-module repositories, or `NONE (Scale S 内联契约)` when a `Scale S` task embeds its lightweight contract directly in `docs/tasks/<task-slug>.md`).
 
 ---
 
@@ -105,8 +104,8 @@ When receiving a development request, **STOP in Phase 1**. Produce the required 
 
 2. **`docs/tasks/<task-slug>.md` (Task Scope, Whitelist & Verification Plan — `templates/task-plan.template.md`)**
    - **Task Metadata**: `TASK_ID`, `MODE`, `SCALE` (`L/M/S`), `CONTRACT_PATH`, and `PHASE_STATUS`.
-   - **In-Scope Actions & Non-Goals**: Concrete verifiable actions and explicit exclusions.
-   - **File Whitelist & Read-Only Boundaries**: Every file allowed to be created or modified (must include `requirements.txt` / `package.json` if dependencies are added/updated).
+   - **In-Scope Actions & Non-Goals**: Concrete verifiable actions and explicit exclusions (`Non-Goals` / `不做项` / `非目标` / `明确不做` / `长期边界`).
+   - **File Whitelist & Read-Only Boundaries**: Every file allowed to be created or modified (must include `requirements.txt` / `package.json` if dependencies are added/updated, and `tests/verification.json` or `tests/**` for Phase 2 runtime acceptance mapping).
    - **Stepwise Verification Commands**: Exact commands for Step 1, Step 2, and Step 3.
    - **Outcome Acceptance & Evidence**: Task-specific `acceptanceItems`, pass/fail criteria, evidence producer/artifact path, and known untested boundaries. For retrieval features, separate candidate discovery from downstream validation; a strict filter passing fixed candidates does not establish live-search success.
 
@@ -164,6 +163,7 @@ Enter Phase 2 **only after** human confirmation of Phase 1.
     2. Transaction failure atomic rollback (no orphan lock on insert failure);
     3. Unauthorized operator rejection (`40301`);
     4. Repeat transition on terminal state (`40903`) and foreign key enforcement.
+  - When evaluating Python/unittest workspaces with `tests/evaluate_workspace.py --scene phase2_delivery`, provide `tests/verification.json` mapping `"initialization"` and every active contract `INV-N` / `AC-N` ID to its `unittest` selector and production call targets (`relative/file.py:callable`; see `examples/minimal-repro/verification.json`).
 - **Step 3: Runtime & End-to-End Smoke Verification (`真实运行与端到端验收`)**
   - Run the live service or reproducible test runner and record actual terminal output.
   - **Honesty Red Line**: If any test or verification command fails, **never claim completion**. Report the exact failure output, fix the root cause, and re-run until green.
@@ -208,10 +208,10 @@ To prevent an agent from silently editing `CONTRACT_PATH` during Phase 2 and the
 - [ ] **Zero** unauthorized business implementation files created or modified yet.
 
 ### Phase 2 Delivery Checklist (Before Claiming Development Complete)
-- [ ] All modified/created files are strictly inside the approved **File Whitelist** (including `requirements.txt` / dependency files).
+- [ ] All modified/created files are strictly inside the approved **File Whitelist** (including `requirements.txt` / dependency files and `tests/verification.json`).
 - [ ] Code matches `CONTRACT_PATH` 100%; any L3 contract change was explicitly re-approved by the human owner before implementation.
 - [ ] Stateful logic enforces all 4 Business Invariants (single active order, same-transaction lock + insert with rollback, targeted lock release, and explicit owner authorization `40301`).
-- [ ] Step 1, Step 2, and Step 3 verification commands were executed with all tests passing (zero unreported failures or `TODO` stubs).
+- [ ] Step 1, Step 2, and Step 3 verification commands were executed with all tests passing (zero unreported failures, `TODO` stubs, or unmapped `INV-N`/`AC-N` items in `tests/verification.json`).
 - [ ] Outcome claims map to acceptance items and reproducible evidence; tested cases, untested boundaries, and `REAL` / `MOCK` dependencies are stated. For AI workflows, report abstentions and recommendation success alongside erroneous recommendations, and distinguish simulated baselines from actual product comparisons.
 
 ---
@@ -223,7 +223,8 @@ To prevent an agent from silently editing `CONTRACT_PATH` during Phase 2 and the
 - `templates/task-plan.template.md` — Template for per-task scope, Scale routing (`L/M/S`), File Whitelist, and verification plan (`docs/tasks/<task-slug>.md`).
 - `templates/contract.template.md` — Self-consistent template for `CONTRACT_PATH` (`docs/contract.md` or `docs/contracts/<module>-contract.md`) with Enforcement Layers, SQLite FK pragma, full state transitions, and Business Invariants.
 - `examples/one-sentence-to-mvp.md` — End-to-end walkthrough demonstration (with explicit evidence boundary notes) + link to the runnable minimal reproduction.
-- `examples/minimal-repro/` — Zero-dependency runnable Python + SQLite implementation and invariant test suite (`python3 -m unittest discover -s examples/minimal-repro -v`).
+- `examples/minimal-repro/` — Zero-dependency runnable Python + SQLite implementation, invariant test suite, and `examples/minimal-repro/verification.json` runtime mapping (`python3 -m unittest discover -s examples/minimal-repro -v`).
 - `tests/validate_structure.py` — Layer 1 deep structural, YAML schema, and template consistency validator (`python3 tests/validate_structure.py`).
-- `tests/evaluate_workspace.py` — Layer 2 behavioral workspace evaluator checking Phase 1 gate compliance, Mode 2 file whitelist isolation, contract alignment, and test failure honesty (`python3 tests/evaluate_workspace.py --self-test`).
-- `CHANGELOG.md` — Version history (`v1.0.0` -> `v1.2.0`).
+- `tests/evaluate_workspace.py` — Layer 2 behavioral workspace evaluator checking Phase 1 gate compliance, Mode 2 file whitelist isolation, contract alignment, and runtime test verification (`python3 tests/evaluate_workspace.py --self-test`).
+- `tests/test_evaluate_workspace.py` — Unit and adversarial regression suite for the Layer 2 workspace evaluator (`python3 -m unittest discover -s tests -p 'test_evaluate_workspace.py' -v`).
+- `CHANGELOG.md` — Version history (`v1.0.0` -> `v1.2.1`).

@@ -91,7 +91,8 @@ HTTP Client / CLI Caller
 ├── sql/
 │   └── schema.sql                   # 可直接执行的建表 DDL 与全部索引定义
 └── tests/
-    └── test_smoke.py                # 覆盖正常闭环 + 并发/事务回滚/越权/终态重复操作的自动化测试
+    ├── test_smoke.py                # 覆盖正常闭环 + 并发/事务回滚/越权/终态重复操作的自动化测试
+    └── verification.json            # 映射 initialization 与各 INV-N / AC-N 到单测及生产目标函数
 ```
 
 ---
@@ -160,7 +161,7 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
   - `requirements.txt`（或 `package.json` / `go.mod` / `pom.xml` 等依赖清单文件）
   - `sql/schema.sql`
   - `app/**`
-  - `tests/**`
+  - `tests/**`（含自动化测试与 `tests/verification.json` 运行时验收映射）
 - *(注：在 Mode 2 已有仓库中，具体白名单以 `TASK_PLAN_PATH` 中声明的子模块文件列表为准。)*
 
 ### 4.2 禁止触碰边界（Forbidden Zones）

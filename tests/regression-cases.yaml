@@ -1,6 +1,6 @@
 version: 3
 purpose: >
-  Deep structural and behavioral regression specifications for dev-skill v1.2.0, guiding AI agents to
+  Deep structural and behavioral regression specifications for dev-skill v1.2.1, guiding AI agents to
   enforce Phase 1 Contract Gate, Scale routing (L/M/S), File Whitelist isolation in existing
   repositories, L1/L2/L3 Contract Synchronization boundaries, Business Invariants (INV-1..INV-4),
   and honest test verification. Conditional workflow cases also cover query abstraction,
