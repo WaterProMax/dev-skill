@@ -8,9 +8,11 @@ import unittest
 from pathlib import Path
 
 from evaluate_workspace import (
+    MAIN_BRANCH_VIOLATION,
     evaluate_scene_a_phase1_gate,
     evaluate_scene_b_brownfield_whitelist,
     evaluate_scene_c_phase2_delivery,
+    is_conventional_commit,
     run_git,
 )
 
@@ -386,6 +388,61 @@ class RuntimeTests(unittest.TestCase):
                 test_cmd=[sys.executable, "-m", "unittest", "discover", "-s", ".", "-p", "test_minimal_repro.py", "-v"],
             )
             self.assertTrue(res.passed, res.violations)
+
+    def test_conventional_commit_subject_soft_check(self):
+        self.assertTrue(is_conventional_commit("feat(book-order): enforce single-active resource lock"))
+        self.assertTrue(is_conventional_commit("fix: reject direct commits on main"))
+        self.assertFalse(is_conventional_commit("Update stuff"))
+        self.assertFalse(is_conventional_commit("feat:missing space"))
+
+    def test_scene_b_rejects_work_on_main_even_inside_whitelist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            run_git(ws, "init", "-b", "main")
+            run_git(ws, "config", "user.email", "test@example.com")
+            run_git(ws, "config", "user.name", "Tester")
+            (ws / "AGENTS.md").write_text("# Rules\n- keep auth\n- keep api\n- keep stack\n", encoding="utf-8")
+            run_git(ws, "add", ".")
+            run_git(ws, "commit", "-m", "chore: baseline")
+            (ws / "docs" / "tasks").mkdir(parents=True)
+            (ws / "app").mkdir()
+            (ws / "docs" / "tasks" / "coupon.md").write_text(
+                "## File Whitelist\n- `docs/tasks/coupon.md`\n- `app/coupon.py`\n",
+                encoding="utf-8",
+            )
+            (ws / "app" / "coupon.py").write_text("def claim():\n    return 1\n", encoding="utf-8")
+            run_git(ws, "add", ".")
+            run_git(ws, "commit", "-m", "feat(coupons): claim inside whitelist")
+            res = evaluate_scene_b_brownfield_whitelist(ws)
+            self.assertFalse(res.passed)
+            self.assertIn(MAIN_BRANCH_VIOLATION, res.violations)
+            self.assertTrue(any(c.startswith("SOFT conventional-commit: HEAD subject matches") for c in res.checks))
+
+    def test_scene_b_feature_branch_does_not_treat_nonconventional_subject_as_hard_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            run_git(ws, "init", "-b", "develop")
+            run_git(ws, "config", "user.email", "test@example.com")
+            run_git(ws, "config", "user.name", "Tester")
+            (ws / "AGENTS.md").write_text("# Rules\n- keep auth\n- keep api\n- keep stack\n", encoding="utf-8")
+            run_git(ws, "add", ".")
+            run_git(ws, "commit", "-m", "chore: baseline")
+            run_git(ws, "checkout", "-b", "feature/coupon-claim")
+            (ws / "docs" / "tasks").mkdir(parents=True)
+            (ws / "app").mkdir()
+            (ws / "docs" / "tasks" / "coupon.md").write_text(
+                "## File Whitelist\n- `docs/tasks/coupon.md`\n- `app/coupon.py`\n",
+                encoding="utf-8",
+            )
+            (ws / "app" / "coupon.py").write_text("def claim():\n    return 1\n", encoding="utf-8")
+            run_git(ws, "add", ".")
+            run_git(ws, "commit", "-m", "added coupon without a conventional subject")
+            res = evaluate_scene_b_brownfield_whitelist(ws)
+            self.assertTrue(res.passed, res.violations)
+            self.assertTrue(
+                any("is not Conventional Commits format" in c for c in res.checks),
+                res.checks,
+            )
 
 
 if __name__ == "__main__":

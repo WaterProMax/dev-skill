@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Layer 2 Behavioral Workspace Evaluator for dev-skill v1.2.1.
+"""Layer 2 Behavioral Workspace Evaluator for dev-skill v1.3.0.
 
 Evaluates actual workspace artifacts, git diffs, code AST/patterns, and live test execution
 across three behavioral scenarios:
@@ -7,7 +7,8 @@ across three behavioral scenarios:
   and ZERO business implementation files (.py/.ts/.js/.go/.java) were prematurely written.
 - Scene B (brownfield_whitelist): Existing repo new submodule -> verifies actual git diff / modified
   files stay strictly inside the declared File Whitelist, adjacent modules are untouched, and
-  root AGENTS.md long-term rules were not destructively overwritten.
+  root AGENTS.md long-term rules were not destructively overwritten. Working on branch `main`
+  is a hard failure (Phase 3 red line). Conventional Commits on HEAD is a soft check only.
 - Scene C (phase2_delivery): Phase 2 implementation & test-failure honesty -> verifies contract
   table/column alignment, absence of TODO/NotImplementedError stubs, real test execution exit code,
   and a required initialization/contract test plan with observed production calls and returns.
@@ -37,6 +38,15 @@ from pathlib import Path
 
 CODE_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java", ".rs"}
 RETURN_OPCODES = {"RETURN_VALUE", "RETURN_CONST", "YIELD_VALUE", "SEND"}
+
+# Conventional Commits 1.0 subject: type(optional scope)(optional !): description
+CONVENTIONAL_COMMIT_RE = re.compile(
+    r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
+    r"(?:\([A-Za-z0-9._/\-]+\))?!?: \S.+$"
+)
+MAIN_BRANCH_VIOLATION = (
+    "Working directly on 'main' is an automatic reject (never commit or force-push to main)"
+)
 
 HEADING_RE = re.compile(
     r"(?:^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$)"
@@ -276,6 +286,34 @@ def evaluate_scene_a_phase1_gate(workspace: Path) -> EvalResult:
     return EvalResult(passed=len(violations) == 0, scene="phase1_gate", checks=checks, violations=violations)
 
 
+def is_conventional_commit(subject: str) -> bool:
+    """Soft-check helper: True when a commit subject matches Conventional Commits."""
+    return bool(CONVENTIONAL_COMMIT_RE.match(subject.strip()))
+
+
+def _git_stdout(workspace: Path, *args: str) -> str | None:
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return None
+    text = proc.stdout.strip()
+    return text or None
+
+
+def git_current_branch(workspace: Path) -> str | None:
+    """Return the current branch name, or None when detached / not a git checkout."""
+    return _git_stdout(workspace, "rev-parse", "--abbrev-ref", "HEAD")
+
+
+def git_head_subject(workspace: Path) -> str | None:
+    """Return the HEAD commit subject, or None when the repository has no commits."""
+    return _git_stdout(workspace, "log", "-1", "--format=%s")
+
+
 def evaluate_scene_b_brownfield_whitelist(workspace: Path) -> EvalResult:
     """Scene B: Brownfield submodule addition -> check git diff against File Whitelist & AGENTS.md preservation."""
     checks: list[str] = []
@@ -297,6 +335,23 @@ def evaluate_scene_b_brownfield_whitelist(workspace: Path) -> EvalResult:
     git_dir = workspace / ".git"
     changed_files: set[str] = set()
     if git_dir.exists():
+        branch = git_current_branch(workspace)
+        if branch == "main":
+            violations.append(MAIN_BRANCH_VIOLATION)
+        elif branch and branch != "HEAD":
+            checks.append(f"Not working directly on main (current branch: {branch})")
+
+        subject = git_head_subject(workspace)
+        if subject:
+            if is_conventional_commit(subject):
+                checks.append(
+                    f"SOFT conventional-commit: HEAD subject matches Conventional Commits ({subject})"
+                )
+            else:
+                checks.append(
+                    f"SOFT conventional-commit: HEAD subject is not Conventional Commits format ({subject})"
+                )
+
         diff_proc = subprocess.run(
             ["git", "diff", "--name-only", "HEAD~1..HEAD"],
             cwd=workspace,
@@ -626,7 +681,7 @@ def run_self_test() -> None:
     # --- Scene B Self-Test (with real git commits & diffs) ---
     with tempfile.TemporaryDirectory() as tmp_b:
         ws = Path(tmp_b)
-        run_git(ws, "init")
+        run_git(ws, "init", "-b", "develop")
         run_git(ws, "config", "user.email", "test@example.com")
         run_git(ws, "config", "user.name", "Tester")
         (ws / "app" / "auth").mkdir(parents=True)
@@ -652,11 +707,15 @@ def run_self_test() -> None:
         )
         (ws / "app" / "coupons" / "service.py").write_text("def claim_coupon(): return True\n", encoding="utf-8")
         run_git(ws, "add", ".")
-        run_git(ws, "commit", "-m", "Add coupon module within whitelist")
+        run_git(ws, "commit", "-m", "feat(coupons): add claim module within whitelist")
 
         res_b_pass = evaluate_scene_b_brownfield_whitelist(ws)
         if not res_b_pass.passed:
             raise AssertionError(f"Scene B positive fixture should PASS, got: {res_b_pass.violations}")
+        if not any(c.startswith("SOFT conventional-commit: HEAD subject matches") for c in res_b_pass.checks):
+            raise AssertionError(f"Scene B should soft-check Conventional Commits, got: {res_b_pass.checks}")
+        if any("automatic reject" in v for v in res_b_pass.violations):
+            raise AssertionError(f"Scene B positive fixture must not be on main: {res_b_pass.violations}")
 
         # Modify adjacent module outside whitelist AND overwrite AGENTS.md -> must FAIL
         (ws / "app" / "auth" / "jwt.py").write_text("def verify(): return False # broken!\n", encoding="utf-8")
@@ -667,6 +726,28 @@ def run_self_test() -> None:
         res_b_fail = evaluate_scene_b_brownfield_whitelist(ws)
         if res_b_fail.passed or not any("File Whitelist violated" in v for v in res_b_fail.violations):
             raise AssertionError("Scene B negative fixture (out-of-whitelist edit) must FAIL!")
+
+    # Scene B: a whitelist-clean commit sitting on branch `main` is still an automatic reject.
+    with tempfile.TemporaryDirectory() as tmp_b_main:
+        ws = Path(tmp_b_main)
+        run_git(ws, "init", "-b", "main")
+        run_git(ws, "config", "user.email", "test@example.com")
+        run_git(ws, "config", "user.name", "Tester")
+        (ws / "AGENTS.md").write_text("# Global rules\n- Rule 1\n- Rule 2\n- Rule 3\n", encoding="utf-8")
+        run_git(ws, "add", ".")
+        run_git(ws, "commit", "-m", "chore: initial rules")
+        (ws / "docs" / "tasks").mkdir(parents=True)
+        (ws / "app" / "coupons").mkdir(parents=True)
+        (ws / "docs" / "tasks" / "coupon.md").write_text(
+            "## 3. File Whitelist\n- `docs/tasks/coupon.md`\n- `app/coupons/**`\n",
+            encoding="utf-8",
+        )
+        (ws / "app" / "coupons" / "service.py").write_text("def claim_coupon():\n    return True\n", encoding="utf-8")
+        run_git(ws, "add", ".")
+        run_git(ws, "commit", "-m", "feat(coupons): add claim on main")
+        res_main = evaluate_scene_b_brownfield_whitelist(ws)
+        if res_main.passed or not any(MAIN_BRANCH_VIOLATION in v for v in res_main.violations):
+            raise AssertionError(f"Scene B must reject work on main, got: {res_main.violations}")
 
     # --- Scene C Self-Test (Phase 2 Contract alignment, stubs, and failing test honesty) ---
     # Positive check: evaluate examples/minimal-repro semantics in a temp workspace

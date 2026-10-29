@@ -1,11 +1,11 @@
-"""Minimal reproducible reference implementation for dev-skill v1.2.1.
+"""Minimal reproducible reference implementation for dev-skill v1.3.0.
 
-Enforces:
+Book-order worked example of the four domain-neutral invariant categories:
 - SQLite per-connection foreign key pragma (PRAGMA foreign_keys = ON)
-- INV-1: Single active PENDING order per book (DB partial unique index + rowcount == 1)
-- INV-2: Atomic book lock + order creation in the same transaction with full rollback on error
-- INV-3: Targeted lock release on order cancellation & terminal state protection (40903)
-- INV-4: Explicit separation of Mock Identity carrier vs real Owner Authorization (40301)
+- INV-1 uniqueness / single-active-resource: one PENDING order per book (partial unique index + rowcount == 1)
+- INV-2 same-transaction atomicity: book lock + order insert roll back together
+- INV-3 precise release + terminal-state idempotency (40903)
+- INV-4 ownership vs mock identity (40301)
 """
 
 from __future__ import annotations
