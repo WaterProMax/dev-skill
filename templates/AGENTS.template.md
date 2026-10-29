@@ -3,7 +3,9 @@
 > **文档职责（长期规则 vs 当轮任务解耦）**：  
 > 1. **`AGENTS.md`（本文件）** 以 **仓库级长期规则** 为主（总体架构、技术栈、分层职责、全局环境变量、权威真源层级与长期编码红线）。在已有仓库（Mode 2）中新增子模块时，**必须保留原有 `AGENTS.md` 约束，仅按必要范围增量修改，严禁覆盖全局规则**。  
 > 2. **当轮任务计划（`TASK_PLAN_PATH`）**：每轮具体开发的 MVP 范围、文件白名单（File Whitelist）、阶段状态与针对性验收命令，建议单独保存在 `docs/tasks/<task-slug>.md`（见 `templates/task-plan.template.md`）；仅当从零立项（Mode 1）的单模块极简项目时，可合并填写在本文件 §1。  
-> 3. **Phase 1 硬门禁**：在项目负责人确认当轮任务单与 `CONTRACT_PATH` 契约之前，**严禁编写任何业务实现代码**。
+> 3. **Phase 1 硬门禁**：在项目负责人确认当轮任务单与 `CONTRACT_PATH` 契约之前，**严禁编写任何业务实现代码**。  
+> 4. **Phase 3 硬红线**：禁止直接向 `main` commit 或 force-push。功能分支为 `feature/<task-slug>`，从 `develop`（或已声明的集成分支）切出；仅当仓库没有 `develop` 且没有其他集成分支时，才允许**从** `main` 切出该功能分支。提交说明使用 Conventional Commits。  
+> 5. **不变量类别**：有状态任务遵循四类领域无关不变量（唯一性 / 同事务原子性 / 精准释放与终态幂等 / 归属人鉴权 vs 模拟身份）。下文教材/订单句子是工作示例，不是非交易模块的必用词汇。
 
 ## 元信息与权威真源路由（Metadata & Source of Truth Routing）
 
@@ -182,3 +184,15 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 1. **拒绝假数据桩代码**：严禁在业务接口中硬编码返回假数组或留 `# TODO` 冒充已落库功能；若外部依赖采用 Mock，必须在 `CONTRACT_PATH` §3 显式标为 `MOCK`。
 2. **严禁隐瞒测试失败**：Step 1~3 校验命令若出现报错或失败用例，必须如实贴出报错并修复，严禁在测试失败时宣称“开发完成”。
 3. **结论与证据对应**：按 `TASK_PLAN_PATH` 的验收项记录提交/配置、命令、日志和未测边界。少量样例通过不能扩写为全面解决；AI/搜索功能分别报告候选发现、证据核验与任务成功，披露样本数、拒绝结果和模拟 Baseline，不将模拟对照写成真实产品评测。
+
+### 4.5 Git 交付红线与分支 / 提交约定（Phase 3）
+
+> **硬红线（自动否决）**：严禁直接在 `main` 上 commit，严禁对 `main` 执行 force-push（含 `--force-with-lease`）。本地测试全绿也不能例外。发现当前工作分支是 `main`，交付直接失败。
+
+1. **集成分支**：从 `develop` 或本文档 / 任务单写明的集成分支切出功能分支，squash merge 回该分支，再等待下一次发版。仅当仓库不存在 `develop` 且没有其他集成分支时，才允许从 `main` **切出** `feature/<task-slug>`；此时 PR 可以指向 `main`，但提交本身不得落在 `main` 上。
+2. **分支名**：`feature/<task-slug>`，与 `TASK_ID`、`TASK_PLAN_PATH` 对应。修复类任务可使用 `fix/<task-slug>`，但必须在任务单声明。
+3. **提交说明（Conventional Commits）**：`<type>(<optional-scope>): <description>`。`type` 取 `feat` / `fix` / `docs` / `style` / `refactor` / `perf` / `test` / `build` / `ci` / `chore` / `revert`。示例：`feat(book-order): enforce single-active resource lock`。
+4. **推送目标**：贡献者远程（fork 的 `origin`，或本人有推送权限的仓库 `origin`）上的功能分支。禁止 `git push` 到 `main`。
+5. **覆盖率门禁（`COVERAGE_GATE`，可配置）**：项目已经统计覆盖率时，默认 ≥95%。若 CI 或本文件已写明其他门槛，沿用该门槛并记入任务单，不要静默改成 95%。项目尚未统计覆盖率时，任务单写 `COVERAGE_GATE: unset` 以及准备采用的起步门槛，不得谎称已达 95%。
+6. **评审**：团队中除仓库所有者外还有至少 2 名评审人时，请求所有者 + 至少 2 名其他人，讨论串全部解决、CI 全绿，并至少 2 个 LGTM / Approve。单人仓库写明 `solo`：所有者自检 1 次 + CI 全绿，不要编造评审人。
+7. **PR 正文**：按 `templates/pull-request.template.md` 填写功能、变更、方案、`CONTRACT_PATH`、任务单路径、验证命令结果、Conventional Commits 摘要与评审人列表。

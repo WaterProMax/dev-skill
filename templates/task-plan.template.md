@@ -12,7 +12,9 @@
 - **关联长期总控**：`AGENTS.md`
 - **关联契约路径（`CONTRACT_PATH`）**：`<docs/contract.md | docs/contracts/<module>-contract.md | NONE (Scale S 内联契约)>`
 - **复用已有规范声明（Mode 2 必填）**：`<例如：复用现有的 OpenAPI docs/openapi.yaml 与统一响应封装 app/common/response.py，不新建冲突结构>`
-- **当前状态（`PHASE_STATUS`）**：`[ ] Phase 1 待确认` / `[ ] Phase 2 开发中` / `[ ] Phase 2 已验收`
+- **集成分支（`INTEGRATION_BRANCH`）**：`<develop | 仓库已声明的集成分支；仅当没有 develop 且没有其他集成分支时，才从 main 切出功能分支>`
+- **覆盖率门禁（`COVERAGE_GATE`）**：`<95（项目已统计覆盖率时的默认值）| 仓库既有门槛，例如 80 | unset（尚未统计；写明准备采用的起步门槛）>`
+- **当前状态（`PHASE_STATUS`）**：`[ ] Phase 1 待确认` / `[ ] Phase 2 开发中` / `[ ] Phase 2 已验收` / `[ ] Phase 3 交付中`
 
 ---
 
@@ -65,13 +67,21 @@
    ```bash
    <填写具体可执行命令，例如：sqlite3 /tmp/test.db "PRAGMA foreign_keys = ON; .read sql/schema.sql">
    ```
-2. **Step 2（单测与业务不变量测试：含并发/原子锁、事务回滚、越权 `40301`、终态重复 `40903`）**：
+2. **Step 2（单测与四类业务不变量：单一有效资源争抢、同事务回滚、归属人拒绝、终态重复。二手书示例错误码为 `40901` / `40301` / `40903`，其他模块用自己的错误码）**：
    ```bash
    <填写具体可执行命令，例如：python3 -m unittest discover -s tests -v>
    ```
 3. **Step 3（端到端冒烟或回归测试）**：
    ```bash
    <填写具体可执行命令，例如：python3 tests/evaluate_workspace.py --workspace . --scene phase2_delivery>
+   ```
+4. **Linter / 风格检查（进入 Phase 3 前必跑；工具名按仓库现有配置填写）**：
+   ```bash
+   <例如：ruff check . 或 npm run lint>
+   ```
+5. **覆盖率门禁（`COVERAGE_GATE`，可配置。已有统计时默认 ≥95%；已有其他门槛则沿用；未统计则写 unset 与起步门槛，不要把未测量写成通过）**：
+   ```bash
+   <例如：coverage run -m unittest discover -s tests && coverage report --fail-under=95>
    ```
 
 ### 5.1 结果验收与证据（按任务填写）
@@ -82,3 +92,15 @@
 - **声明边界**：`<哪些功能已实现/已实测；哪些依赖为 MOCK；未测或未知项>`
 - **复现信息**：`<提交、配置/运行环境、样例 ID、时间、命令、退出状态及日志路径>`
 - **搜索/推荐/AI 任务（仅适用时）**：参考 Skill 的 `references/evidence-driven-workflows.md`，分别定义候选发现与逐项核验的通过标准，列出 `fixed-material` / `end-to-end-search` 的运行条件、Baseline 公平性、样本数、成功/错误/拒绝计数与分母、成本和重试预算。不能用全部拒绝的“零误推”替代推荐成功率。
+
+---
+
+## 6. Phase 3 交付清单（Git / PR — 验证通过后填写）
+
+> 硬红线：当前分支不得是 `main`；禁止直接 commit 或 force-push 到 `main`。正文按 `templates/pull-request.template.md` 填写。
+
+- **分支名**：`feature/<task-slug>`（与 `TASK_ID` 对应；从 `INTEGRATION_BRANCH` 切出）
+- **PR 链接**：`<https://...>`
+- **评审人**：`<仓库所有者 + 至少 2 名其他评审人；单人仓库写 solo，并注明所有者自检 1 次>`
+- **CI**：`[ ] 全绿`
+- **合入方式**：squash merge 到 `INTEGRATION_BRANCH`，然后等待下一次发版，不自行把提交推上 `main`

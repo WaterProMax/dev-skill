@@ -9,13 +9,13 @@
 
 ---
 
-## 0. 对比：没有 `dev-skill` vs 启用 `dev-skill` (`v1.2.1`)
+## 0. 对比：没有 `dev-skill` vs 启用 `dev-skill` (`v1.3.0`)
 
 | 维度 | ❌ 没有 `dev-skill`（常见翻车现场） | ✅ 启用 `dev-skill`（本案例流程） |
 |---|---|---|
 | **收到一句话后的第一反应** | 立刻写 `main.py`、`jwt_auth.py`、`wx_pay.py` 等十几个文件 | **触发 Phase 1 硬门禁 + 规模路由（Mode 1 / Scale L）**：先生成 `AGENTS.md`、`docs/tasks/mvp-init.md` 与 `docs/contract.md` 请人确认 |
 | **规则与契约自洽性** | 字段长度、索引名、状态枚举前后矛盾，SQLite 外键未开启 | 标注每条规则的 **保证层（DB / Request / Service）**，开启 `PRAGMA foreign_keys = ON`，状态机完整覆盖 `OFF_SHELF` |
-| **并发、事务与权限边界** | 只测顺序成功请求，无事务回滚测试，谁都能取消别人的订单 | 明确定义并测试 **4 条业务不变量（`INV-1`～`INV-4`）**：同事务原子锁与回滚、部分唯一索引、归属人权限 `40301`、终态防重 `40903` |
+| **并发、事务与权限边界** | 只测顺序成功请求，无事务回滚测试，谁都能取消别人的订单 | 按四类领域无关不变量测试 **`INV-1`～`INV-4`**（本例：单一有效待交易订单、同事务锁书与建单、精准释放与终态 `40903`、归属人鉴权 `40301`）。其他模块替换资源名，不强制使用教材措辞 |
 | **中途契约变更治理** | AI 自己偷偷删改契约再宣称“代码与契约 100% 一致” | 执行 **三级契约变更协议（L1/L2/L3）**：新增字段或改行为属于 **L3 变更**，必须由人工确认后同步 |
 
 ---
@@ -53,11 +53,11 @@
 2. **状态流转全覆盖（含 `OFF_SHELF`）**：
    - `ON_SALE -> OFF_SHELF`（仅卖家本人下架；`RESERVED`/`SOLD` 状态禁止下架，返回 `40902`）；`OFF_SHELF -> ON_SALE`（仅卖家本人重新上架）。
    - `SOLD`、`COMPLETED`、`CANCELLED` 为终态，重复流转统一返回 `40903 INVALID_ORDER_TRANSITION`。
-3. **四条可验证业务不变量（`INV-1`～`INV-4`）**：
-   - `INV-1`：同一本书最多存在一个 `PENDING` 订单（`DB Constraint: uk_orders_active_book` + `Service Invariant: rowcount == 1`，冲突返回 `40901`）。
-   - `INV-2`：锁书与建单在同一事务内执行，任一步异常整体回滚。
-   - `INV-3`：取消订单仅释放本单关联且处于 `RESERVED` 的教材；终态禁止重复操作（`40903`）。
-   - `INV-4`：模拟身份通过 `seller_id`/`buyer_id`/`operator_id` 传递，非归属人操作统一返回 `40301 FORBIDDEN_NOT_OWNER`。
+3. **四类可验证业务不变量（`INV-1`～`INV-4`；本模块的二手书实例）**：
+   - `INV-1` 唯一性 / 单一有效待处理资源：同一本书最多一个 `PENDING` 订单（`uk_orders_active_book` + `rowcount == 1`，冲突 `40901`）。
+   - `INV-2` 同事务原子性：锁书与建单在同一事务内执行，任一步异常整体回滚。
+   - `INV-3` 精准释放与终态幂等：取消订单只释放本单关联且处于 `RESERVED` 的教材；终态重复操作返回 `40903`。
+   - `INV-4` 归属人鉴权 vs 模拟身份：身份经 `seller_id`/`buyer_id`/`operator_id` 传递，非归属人返回 `40301 FORBIDDEN_NOT_OWNER`。
 
 ---
 
@@ -136,3 +136,14 @@ OK
    ```json
    {"code":40903,"message":"Order 1 is already in terminal state COMPLETED","data":null}
    ```
+
+---
+
+## 3. Phase 3：验证全绿后的 Git 交付清单（摘录）
+
+Phase 2 命令退出码为 0 之后才进入 Phase 3。完整填法见 [`examples/phase3-checklist.md`](./phase3-checklist.md)。本例：
+
+- **分支名**：`feature/book-order-mvp`（从 `develop` 切出，绑定 `TASK-2026-001-book-order-mvp` / `docs/tasks/book-order-mvp.md`）
+- **PR 链接**：按 [`templates/pull-request.template.md`](../templates/pull-request.template.md) 填写 `CONTRACT_PATH`、验证命令结果、`feat(book-order): enforce single-active resource lock` 与评审人
+- **评审人**：仓库所有者 + 另外 2 人；单人仓库则写 `solo`（所有者自检 1 次 + CI 全绿）
+- **硬红线**：不在 `main` 上 commit，也不对 `main` force-push；squash merge 到 `develop` 后等待发版

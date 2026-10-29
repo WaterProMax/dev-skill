@@ -2,7 +2,8 @@
 
 > **文档性质**：本文件由 `dev-skill` 在 **Phase 1（契约门禁阶段）** 生成，是前后端联调、跨模块对接及 AI 编码的 **唯一真相源（Single Source of Truth）**。  
 > **路径约定（`CONTRACT_PATH`）**：单模块项目默认存放于 `docs/contract.md`；多模块或已有仓库（Mode 2）统一存放于 `docs/contracts/<module>-contract.md`，并在 `AGENTS.md` 与 `docs/tasks/<task-slug>.md` 中通过 `CONTRACT_PATH` 显式引用。  
-> **对齐与变更铁律**：实现代码中的物理表名、字段名、长度约束、索引名、状态枚举、业务不变量、路由路径与错误码必须与本文件 **100% 一致**。任何涉及删除/修改字段、改变状态流转或权限边界的变更（**L3 变更**）必须先提交具体差异并重新获得人工确认后才准改代码。
+> **对齐与变更铁律**：实现代码中的物理表名、字段名、长度约束、索引名、状态枚举、业务不变量、路由路径与错误码必须与本文件 **100% 一致**。任何涉及删除/修改字段、改变状态流转或权限边界的变更（**L3 变更**）必须先提交具体差异并重新获得人工确认后才准改代码。  
+> **不变量类别与本文件示例**：`INV-1`～`INV-4` 的标题是领域无关类别（唯一性 / 同事务原子性 / 精准释放与终态幂等 / 归属人鉴权 vs 模拟身份）。下面的表、状态机、错误码与接口是**校园二手书订单**的工作示例。非交易模块（优惠券、工单、库存、CLI）沿用这四类，替换自己的资源名与错误码，不要为了套模板把冲突码改成 `BOOK_NOT_AVAILABLE`。无共享可变状态的 Scale S 任务可将不适用的类别标为 `N/A`。
 
 - **所属项目/模块**：`<填写项目或模块名，例如：校园二手书交易模块>`
 - **关联长期总控文件**：`AGENTS.md`
@@ -138,14 +139,15 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 
 ### 1.5 核心业务不变量、并发事务与操作权限规则（Verifiable Business Invariants & Auth Rules）
 
-> **测试覆盖铁律**：Phase 2 的自动化测试必须针对以下 4 条不变量编写专门的验证用例（涵盖并发/条件更新锁抢占、事务中途失败回滚、非归属人越权操作 `40301`、终态重复操作 `40903`），绝不能只测顺序成功请求。
+> **类别铁律**：有状态模块必须定义下面四类不变量，并写明保证层。名称使用领域无关标题；括号内是本模板的二手书订单示例，其他模块换成自己的资源。  
+> **测试覆盖铁律**：Phase 2 的自动化测试必须覆盖这四类（并发/条件更新抢占、事务中途失败回滚、非归属人拒绝、终态重复操作），绝不能只测顺序成功请求。本示例的错误码是 `40901` / `40301` / `40903`，不是所有模块的必用码。
 
-| 不变量编号 | 不变量名称 | 严格业务定义与实现要求 | 保证层 (Enforcement Layer) | 必测验证场景与预期错误码 |
+| 不变量编号 | 不变量名称（类别；括号内为本示例） | 严格业务定义与实现要求 | 保证层 (Enforcement Layer) | 必测验证场景与预期错误码 |
 |---|---|---|---|---|
-| **INV-1** | **唯一有效待交易订单不变量** | 同一本教材（`book_id`）在同一时刻最多只能存在 **1 个** `status = 'PENDING'` 的有效待交易订单，严禁一书多卖。 | `DB Constraint`（部分唯一索引 `uk_orders_active_book`）+ `Service Invariant`（条件原子更新 `WHERE id = ? AND status = 'ON_SALE'` 且检查 `rowcount == 1`） | 两个买家针对同一本 `ON_SALE` 教材发起抢购或重复下单，仅第一个成功，后续请求必须返回 `40901 BOOK_NOT_AVAILABLE` |
-| **INV-2** | **锁书与建单同事务原子性不变量** | 更新 `books.status = 'RESERVED'` 与插入 `orders` 记录必须在 **同一个数据库事务（Transaction）** 中执行；若订单写入或校验失败，必须整体回滚，教材状态必须保持 `ON_SALE`。 | `Service Invariant`（显式事务上下文 `with conn:`）+ `DB Constraint` | 模拟锁书成功后订单插入抛出异常（如违反约束），断言事务回滚后 `books.status` 仍为 `'ON_SALE'` 且无残留脏订单 |
-| **INV-3** | **取消订单精准释放锁定不变量** | 取消订单（`PENDING -> CANCELLED`）只能释放 **该订单自身关联（`orders.book_id`）且当前处于 `'RESERVED'` 状态** 的教材回 `'ON_SALE'`；严禁误释放其他订单或已售出教材。 | `Service Invariant`（同事务内校验订单状态与 `books.status == 'RESERVED'`） | 订单取消后验证对应教材恢复 `'ON_SALE'`；对已 `CANCELLED` 或 `COMPLETED` 的终态订单再次调用取消/完成，必须返回 `40903 INVALID_ORDER_TRANSITION` |
-| **INV-4** | **模拟身份与操作权限分离不变量** | **模拟身份传递方式**：MVP 阶段通过请求字段（`seller_id` / `buyer_id` / `operator_id`）或请求头 `X-User-Id` 传递当前操作人身份。<br>**操作权限判定规则**：<br>① 下架/重新上架教材：仅允许该教材的 `books.seller_id` 本人操作；<br>② 创建订单：`buyer_id` 严禁等于 `books.seller_id`（自买返回 `40002`）；<br>③ 完成/取消订单：仅允许该订单的 `orders.buyer_id` 或关联教材的 `books.seller_id` 操作。 | `Request Validation`（操作人标识非空）+ `Service Invariant`（归属权比对） | 路人账号（既非买家也非卖家）尝试取消/完成他人订单，或尝试下架他人教材，必须被拦截并返回 HTTP `403` / `40301 FORBIDDEN_NOT_OWNER` |
+| **INV-1** | **唯一性 / 单一有效待处理资源（防重）**（示例：唯一有效待交易订单） | 同一业务资源在同一时刻最多只能存在 **1 条**处于待处理/活跃状态的记录。（本示例：同一本教材 `book_id` 最多 1 个 `status = 'PENDING'` 的订单，严禁一书多卖。） | `DB Constraint`（部分唯一索引 `uk_orders_active_book`）+ `Service Invariant`（条件原子更新 `WHERE id = ? AND status = 'ON_SALE'` 且检查 `rowcount == 1`） | 两个参与者争抢同一可用资源，仅第一个成功。本示例：两个买家抢同一本 `ON_SALE` 教材，后续请求返回 `40901 BOOK_NOT_AVAILABLE` |
+| **INV-2** | **同事务原子性**（示例：锁书与建单同事务） | 必须一起成功或一起失败的相关写入在 **同一个数据库事务（Transaction）** 中执行；任一步失败则整体回滚，不得留下孤儿锁或写了一半的记录。（本示例：`books.status = 'RESERVED'` 与 `INSERT INTO orders` 同事务；失败后教材仍为 `ON_SALE`。） | `Service Invariant`（显式事务上下文 `with conn:`）+ `DB Constraint` | 模拟第一步成功、第二步抛错，断言回滚后资源未被锁住且无残留记录。本示例：`books.status` 仍为 `'ON_SALE'` 且无脏订单 |
+| **INV-3** | **精准释放与终态幂等**（示例：取消订单只释放本单锁定） | 释放/回滚只作用于**该操作绑定的资源**，且该资源必须处于预期的占用态；对终态重复操作不得产生第二次副作用。（本示例：`PENDING -> CANCELLED` 只把该单 `orders.book_id` 上仍为 `'RESERVED'` 的教材改回 `'ON_SALE'`。） | `Service Invariant`（同事务内校验操作对象与资源当前状态） | 释放后仅目标资源恢复可用。对已进入终态的记录再次操作必须拒绝。本示例：`CANCELLED` / `COMPLETED` 再次取消或完成返回 `40903 INVALID_ORDER_TRANSITION` |
+| **INV-4** | **归属人鉴权 vs 模拟身份**（示例：模拟身份与操作权限分离） | **身份载体（可为 `MOCK`）**：调用方如何表明自己（请求头或正文字段）。<br>**鉴权规则（必须为 `REAL`）**：谁可以改哪条资源。二者分开写，禁止用“身份是模拟的”跳过归属校验。<br>本示例载体：`seller_id` / `buyer_id` / `operator_id` 或请求头 `X-User-Id`。<br>本示例规则：① 上下架仅 `books.seller_id`；② 创建订单时 `buyer_id != books.seller_id`（自买 `40002`）；③ 完成/取消仅该单 `orders.buyer_id` 或关联 `books.seller_id`。 | `Request Validation`（操作人标识非空）+ `Service Invariant`（归属权比对） | 非归属人调用必须被拒绝。本示例：路人取消他人订单或下架他人教材返回 HTTP `403` / `40301 FORBIDDEN_NOT_OWNER` |
 
 ---
 

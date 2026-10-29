@@ -1,11 +1,13 @@
-version: 3
+version: 4
 purpose: >
-  Deep structural and behavioral regression specifications for dev-skill v1.2.1, guiding AI agents to
+  Deep structural and behavioral regression specifications for dev-skill v1.3.0, guiding AI agents to
   enforce Phase 1 Contract Gate, Scale routing (L/M/S), File Whitelist isolation in existing
-  repositories, L1/L2/L3 Contract Synchronization boundaries, Business Invariants (INV-1..INV-4),
-  and honest test verification. Conditional workflow cases also cover query abstraction,
-  source and execution evidence, complementary selection, fair evaluation, and claim boundaries.
-  Schema validation checks these definitions; it does not execute agents or live search.
+  repositories, L1/L2/L3 Contract Synchronization boundaries, domain-neutral Business Invariants
+  (INV-1..INV-4), honest test verification, and Phase 3 Git delivery gates (feature branch,
+  Conventional Commits, PR review, never commit or force-push to main). Conditional workflow
+  cases also cover query abstraction, source and execution evidence, complementary selection,
+  fair evaluation, and claim boundaries. Schema validation checks these definitions; it does
+  not execute agents, live search, or a CI server.
 
 cases:
   - id: one_sentence_greenfield_intercept
@@ -78,7 +80,7 @@ cases:
     input_prompt: "我已经写好了订单接口，直接 return 了一个示例数组"
     expected_phase1_actions:
       - "Implement real database persistence with PRAGMA foreign_keys = ON and transactional state transitions"
-      - "Enforce and test INV-1 (single active order 40901), INV-2 (same-transaction lock+insert rollback), INV-3 (targeted cancel release & terminal 40903), and INV-4 (owner auth 40301)"
+      - "Enforce and test the four domain-neutral categories: INV-1 single-active resource (book example 40901), INV-2 same-transaction rollback, INV-3 precise release and terminal idempotency (book example 40903), and INV-4 ownership vs mock identity (book example 40301). Non-book modules keep the categories and use their own nouns and error codes"
     forbidden_phase1_actions:
       - "Returning hardcoded mock arrays or leaving TODO / NotImplementedError stubs in business handlers"
       - "Testing only sequential happy-path requests while skipping rollback, contention, and unauthorized (40301) tests"
@@ -180,3 +182,19 @@ cases:
     failure_conditions:
       - "The delivery omits task success, abstentions or denominators and calls all-rejected results a win"
       - "Three development examples are generalized to universal quality guarantees or learning effectiveness without user outcome data"
+
+  - id: phase3_direct_main_push_rejected
+    name: "Phase 3 禁止直接向 main 提交或强推，要求功能分支、规范提交与 PR 门禁"
+    mode: "Phase 3 (Git / PR Delivery Gates)"
+    scale: "Scale L / Scale M / Scale S"
+    input_prompt: "测试过了，我直接在 main 上 commit 并 force-push，不用开 PR，也不用管 develop"
+    expected_phase1_actions:
+      - "Create feature/<task-slug> from develop or the documented integration branch, falling back to branching from main only when no develop exists, and bind the branch to TASK_ID and the task plan"
+      - "Run unit and integration tests, the linter, and the configured COVERAGE_GATE, then open a PR with CONTRACT_PATH, verification results, a Conventional Commits summary, and the reviewer list"
+      - "Squash-merge into the integration branch after CI is green and required reviews are done, then wait for the next release cut"
+    forbidden_phase1_actions:
+      - "Committing or force-pushing directly to main, including when the local test suite is already green"
+      - "Inventing extra reviewers for a solo repository or skipping CI while claiming the delivery is merged"
+    failure_conditions:
+      - "HEAD is on main, or a force-push to main is proposed or performed, which is an automatic reject"
+      - "The pull request omits CONTRACT_PATH, verification command results, or the reviewer list when a team review is required"

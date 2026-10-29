@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Layer 1 Validator for dev-skill v1.2.1:
+"""Layer 1 Validator for dev-skill v1.3.0:
 1. Repository file & relative reference integrity across all Markdown documents
 2. SKILL.md frontmatter & routing/protocol markers (Scale L/M/S, L1/L2/L3, INV-1..INV-4, verification.json)
 3. Deep YAML parsing & schema validation of tests/regression-cases.yaml
@@ -32,6 +32,8 @@ REQUIRED_FILES = [
     ROOT / "templates" / "AGENTS.template.md",
     ROOT / "templates" / "task-plan.template.md",
     ROOT / "templates" / "contract.template.md",
+    ROOT / "templates" / "pull-request.template.md",
+    ROOT / "examples" / "phase3-checklist.md",
     ROOT / "examples" / "one-sentence-to-mvp.md",
     ROOT / "examples" / "minimal-repro" / "README.md",
     ROOT / "examples" / "minimal-repro" / "schema.sql",
@@ -57,6 +59,7 @@ REQUIRED_CASE_IDS = [
     "complementary_selection_constraints",
     "fixed_vs_live_fair_comparison",
     "abstention_and_claim_boundaries",
+    "phase3_direct_main_push_rejected",
 ]
 
 
@@ -352,13 +355,42 @@ def audit_template_consistency(contract_tpl: str, agents_tpl: str, task_tpl: str
         "L1",
         "L2",
         "L3",
+        "force-push",
+        "Conventional Commits",
+        "COVERAGE_GATE",
+        "feature/",
     ):
         if marker not in agents_tpl:
             fail(f"templates/AGENTS.template.md missing required marker: {marker}")
 
-    for marker in ("TASK_ID", "SCALE", "CONTRACT_PATH", "File Whitelist", "Scale S", "tests/verification.json"):
+    for marker in (
+        "TASK_ID",
+        "SCALE",
+        "CONTRACT_PATH",
+        "File Whitelist",
+        "Scale S",
+        "tests/verification.json",
+        "COVERAGE_GATE",
+        "INTEGRATION_BRANCH",
+        "Phase 3",
+        "Linter",
+    ):
         if marker not in task_tpl:
             fail(f"templates/task-plan.template.md missing required marker: {marker}")
+
+    pr_tpl_path = ROOT / "templates" / "pull-request.template.md"
+    pr_tpl = pr_tpl_path.read_text(encoding="utf-8")
+    for marker in (
+        "CONTRACT_PATH",
+        "TASK_PLAN_PATH",
+        "Conventional Commits",
+        "COVERAGE_GATE",
+        "评审人",
+        "force-push",
+        "feat(book-order): enforce single-active resource lock",
+    ):
+        if marker not in pr_tpl:
+            fail(f"templates/pull-request.template.md missing required marker: {marker}")
 
 
 def self_test_yaml_mutation_guard(original_yaml: str) -> None:
@@ -398,6 +430,25 @@ def validate_markdown_links() -> None:
                 fail(f"{md_path.relative_to(ROOT)} links to non-existent path: {ref}")
 
 
+def audit_conventional_commit_helper() -> None:
+    """Soft-check the shared Conventional Commits subject predicate with fixed samples."""
+    from evaluate_workspace import is_conventional_commit
+
+    samples = {
+        "feat(book-order): enforce single-active resource lock": True,
+        "fix: reject direct commits on main": True,
+        "docs(readme): describe phase 3 gates": True,
+        "chore!: note the main red line": True,
+        "Update stuff": False,
+        "feat:missing space": False,
+        "feature: add gate": False,
+        "WIP": False,
+    }
+    for subject, expected in samples.items():
+        if is_conventional_commit(subject) is not expected:
+            fail(f"Conventional Commits soft-check mismatch for {subject!r} (expected {expected})")
+
+
 def main() -> None:
     for path in REQUIRED_FILES:
         if not path.exists():
@@ -421,7 +472,7 @@ def main() -> None:
     if len(description) > 500:
         fail(f"SKILL.md description exceeds 500 chars ({len(description)} chars)")
 
-    # 2. Check core sections and v1.2.1 markers in SKILL.md
+    # 2. Check core sections and v1.3.0 markers in SKILL.md
     required_skill_markers = [
         "Mode 1",
         "Mode 2",
@@ -448,10 +499,16 @@ def main() -> None:
         "40903",
         "tests/verification.json",
         "Pre-Completion Verification Checklist",
+        "Phase 3",
+        "Conventional Commits",
+        "never commit or force-push directly to `main`",
+        "COVERAGE_GATE",
+        "feature/<task-slug>",
+        "feat(book-order): enforce single-active resource lock",
     ]
     missing_skill = [m for m in required_skill_markers if m not in skill_text]
     if missing_skill:
-        fail(f"SKILL.md missing required v1.2.1 markers: {missing_skill}")
+        fail(f"SKILL.md missing required v1.3.0 markers: {missing_skill}")
 
     # 3. Check relative file references in SKILL.md and Markdown links across docs
     for ref in re.findall(
@@ -489,6 +546,7 @@ def main() -> None:
     task_tpl = (ROOT / "templates" / "task-plan.template.md").read_text(encoding="utf-8")
     contract_tpl = (ROOT / "templates" / "contract.template.md").read_text(encoding="utf-8")
     audit_template_consistency(contract_tpl, agents_tpl, task_tpl)
+    audit_conventional_commit_helper()
 
     # 6. Check examples/one-sentence-to-mvp.md evidence boundary & alignment
     example_text = (ROOT / "examples" / "one-sentence-to-mvp.md").read_text(encoding="utf-8")

@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0 — Phase 3 Git Delivery Gates & Domain-Neutral Business Invariants
+
+The requested label for this upgrade was v1.2.0. It is published as **v1.3.0** because v1.2.0 (evidence-driven workflows) and v1.2.1 (evaluator hardening) are already on `main`.
+
+### Added
+
+- **Phase 3 — Git / PR delivery gates** after Phase 2 verification (not a separate skill): fork when needed, `feature/<task-slug>` from `develop` or the documented integration branch (branch *from* `main` only when no integration branch exists), local unit + integration tests, configurable coverage gate, linter, Conventional Commits, push to the contributor remote, PR description, review, CI green, squash-merge, then wait for the next release cut.
+- **Hard red line:** never commit or force-push directly to `main` (automatic reject). Encoded in `SKILL.md`, `templates/AGENTS.template.md` guardrails, the task-plan Phase 3 checklist, and `templates/pull-request.template.md`.
+- **`COVERAGE_GATE`:** default ≥95% when the project already measures coverage; otherwise record the repository's existing threshold or `unset`. The skill does not embed a CI system.
+- **Review rules:** repository owner + at least two other reviewers and ≥2 LGTM when the team has them; solo repositories use one owner self-check plus CI green.
+- **`examples/phase3-checklist.md`:** filled branch / PR / reviewer checklist, including a non-book coupon sketch.
+- **Evaluator signals in Scene B** (`tests/evaluate_workspace.py`, which already reads git state): working on branch `main` is a hard failure; Conventional Commits subjects are a soft check (reported, not a scene failure).
+
+### Changed
+
+- **`INV-1`～`INV-4` titles and definitions are domain-neutral categories:** uniqueness / single-active-resource, atomicity of related mutations in one transaction, precise release + terminal-state idempotency, and ownership / authorization vs mock identity. The campus book-order case remains a worked example in parentheses and in `examples/`. Non-trading modules are not required to use book vocabulary or the example error-code names.
+
+---
+
 ## 1.2.1 — Evaluator Adversarial Hardening, Template Alignment & Scale S Inline Contract Support
 
 - **Template & Skill Alignment for `tests/verification.json`**: Explicitly documented `tests/verification.json` in `SKILL.md` (Phase 2 execution & pre-completion checklist), `templates/task-plan.template.md` (§3.1 File Whitelist and §5.1 runtime verification mapping), and `templates/AGENTS.template.md` (§2.3 directory tree and §4.1 File Whitelist), and bundled a live-verified `examples/minimal-repro/verification.json` mapping `initialization` and `INV-1`..`INV-4` to `test_minimal_repro.py` and `book_order_service.py`.
